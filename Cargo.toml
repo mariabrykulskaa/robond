@@ -4,6 +4,3 @@ members = [
     "project1",
     "project2",
 ]
-
-[workspace.dependencies]
-pyo3 = "0.19"
