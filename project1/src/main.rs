@@ -5,14 +5,7 @@ fn main() {
 }
 
 fn add(a: i32, b: i32) -> i32 {
-    let mut sum = 0;
-    for _i in 0..a {
-        sum += 1;
-    }
-    for _i in 0..b {
-        sum += 1;
-    }
-    sum
+    a + b
 }
 
 #[cfg(test)]
