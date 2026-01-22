@@ -1,5 +1,5 @@
 [package]
-name = "broker_api"
+name = "t-invest-api-rust"
 version = "0.1.0"
 edition = "2024"
 
