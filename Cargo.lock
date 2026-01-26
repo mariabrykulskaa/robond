@@ -959,14 +959,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tmp"
-version = "0.1.0"
-dependencies = [
- "t-invest-api-rust",
- "tokio",
-]
-
-[[package]]
 name = "tokio"
 version = "1.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
