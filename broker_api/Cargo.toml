@@ -1,0 +1,15 @@
+[package]
+name = "broker_api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tonic-prost = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }

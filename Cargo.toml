@@ -1,6 +1,16 @@
 [workspace]
 resolver = "3"
 members = [
-    "project1",
-    "project2",
+    "broker_api",
 ]
+
+[workspace.dependencies]
+tokio = { version = "1.49.0", features = ["full"] }
+
+tonic = { version = "0.14.2", features = ["tls-native-roots", "tls-ring", "gzip"] }
+prost = "0.14.3"
+prost-types = "0.14.3"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.2"
+
+broker_api = { path = "broker_api" }

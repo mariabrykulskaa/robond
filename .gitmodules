@@ -1,0 +1,3 @@
+[submodule "broker_api/invest-contracts"]
+	path = broker_api/invest-contracts
+	url = https://opensource.tbank.ru/invest/invest-contracts
