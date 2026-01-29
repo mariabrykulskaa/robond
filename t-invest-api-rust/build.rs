@@ -21,9 +21,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     proto_files.sort();
 
     // Компилируем все proto файлы одновременно в один модуль
-    // Используем tonic_prost_build для компиляции всех файлов вместе
-    // Это генерирует как структуры данных, так и gRPC сервисы
-    tonic_prost_build::configure().compile_protos(&proto_files, &[contracts_dir.to_string()])?;
+    tonic_prost_build::configure()
+        .build_server(false)
+        .compile_protos(&proto_files, &[contracts_dir.to_string()])?;
 
     Ok(())
 }

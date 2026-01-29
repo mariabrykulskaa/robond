@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "broker_api",
+    "t-invest-api-rust", "tmp",
 ]
 
 [workspace.dependencies]
@@ -13,4 +13,4 @@ prost-types = "0.14.3"
 tonic-prost = "0.14.2"
 tonic-prost-build = "0.14.2"
 
-broker_api = { path = "broker_api" }
+t-invest-api-rust = { path = "t-invest-api-rust" }
