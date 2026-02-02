@@ -1,145 +1,109 @@
-use anyhow::Result;
 use chrono::NaiveDate;
 use sqlx::{postgres::PgPoolOptions, PgPool};
-use std::io::{self, Write};
 
+use crate::config::DbConfig;
+use crate::error::Result;
 use crate::models::{BondHistoryData, BondInfo};
 
-/// Клиент для работы с базой данных исторических данных
+/// Клиент для работы с базой данных исторических данных.
+///
+/// ## Потокобезопасность
+///
+/// `MarketDataClient: Send + Sync + Clone`.
+/// Внутренний `PgPool` построен на `Arc<Pool<Postgres>>`, поэтому клиент
+/// безопасно разделять между потоками и задачами tokio.
+/// `Clone` — дешёвый: создаётся дополнительная ссылка на тот же пул.
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use history_market_data::MarketDataClient;
+///
+/// # async fn example() -> history_market_data::Result<()> {
+/// let client = Arc::new(MarketDataClient::from_env().await?);
+/// let client2 = Arc::clone(&client); // безопасно в нескольких задачах
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone)]
 pub struct MarketDataClient {
     pool: PgPool,
 }
 
 impl MarketDataClient {
-    /// Создать новое подключение к базе данных
+    /// Создать клиент из готового пула соединений.
     ///
-    /// # Аргументы
-    /// * `database_url` - URL подключения к PostgreSQL в формате:
-    ///   `postgresql://username:password@host:port/database`
-    ///   
-    /// # Пример
+    /// Используйте этот конструктор для внедрения зависимостей (DI)
+    /// и написания тестов с моковым пулом.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    /// Создать клиент из явной конфигурации.
+    ///
+    /// Рекомендуемый способ в production: конфиг можно собрать из любого
+    /// источника (env, конфиг-файл, secret manager) независимо от клиента.
+    ///
     /// ```no_run
-    /// # use history_market_data::MarketDataClient;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let client = MarketDataClient::new(
-    ///     "postgresql://Maria:password@79.174.88.198:16305/HedgehogFinanceDB"
-    /// ).await?;
+    /// use history_market_data::{DbConfig, MarketDataClient};
+    ///
+    /// # async fn example() -> history_market_data::Result<()> {
+    /// let config = DbConfig::from_env()?;
+    /// let client = MarketDataClient::with_config(&config).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn new(database_url: &str) -> Result<Self> {
-        let pool = PgPoolOptions::new().max_connections(5).connect(database_url).await?;
-
+    pub async fn with_config(config: &DbConfig) -> Result<Self> {
+        let pool = PgPoolOptions::new()
+            .max_connections(config.max_connections)
+            .connect(&config.database_url())
+            .await?;
         Ok(Self { pool })
     }
 
-    /// Создать подключение из отдельных параметров
+    /// Удобный shortcut: создать клиент напрямую из `.env` файла.
     ///
-    /// # Аргументы
-    /// * `host` - Хост базы данных (например, "79.174.88.198")
-    /// * `port` - Порт (например, 16305)
-    /// * `database` - Имя базы данных (например, "HedgehogFinanceDB")
-    /// * `username` - Имя пользователя
-    /// * `password` - Пароль
-    ///   
-    /// # Пример
+    /// Эквивалентно `DbConfig::from_env()` + `with_config`.
+    ///
     /// ```no_run
     /// # use history_market_data::MarketDataClient;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let client = MarketDataClient::from_credentials(
-    ///     "79.174.88.198",
-    ///     16305,
-    ///     "HedgehogFinanceDB",
-    ///     "username",
-    ///     "password"
-    /// ).await?;
+    /// # async fn example() -> history_market_data::Result<()> {
+    /// let client = MarketDataClient::from_env().await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn from_credentials(
-        host: &str,
-        port: u16,
-        database: &str,
-        username: &str,
-        password: &str,
-    ) -> Result<Self> {
-        let database_url = format!("postgresql://{}:{}@{}:{}/{}", username, password, host, port, database);
-        Self::new(&database_url).await
+    pub async fn from_env() -> Result<Self> {
+        let config = DbConfig::from_env()?;
+        Self::with_config(&config).await
     }
 
-    /// Создать подключение с интерактивным вводом учетных данных из консоли
-    ///
-    /// # Аргументы
-    /// * `host` - Хост базы данных (например, "79.174.88.198")
-    /// * `port` - Порт (например, 16305)
-    /// * `database` - Имя базы данных (например, "HedgehogFinanceDB")
-    ///   
-    /// # Пример
-    /// ```no_run
-    /// # use history_market_data::MarketDataClient;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let client = MarketDataClient::connect_interactive(
-    ///     "79.174.88.198",
-    ///     16305,
-    ///     "HedgehogFinanceDB"
-    /// ).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn connect_interactive(host: &str, port: u16, database: &str) -> Result<Self> {
-        // Запрашиваем имя пользователя
-        print!("Введите имя пользователя: ");
-        io::stdout().flush()?;
-        let mut username = String::new();
-        io::stdin().read_line(&mut username)?;
-        let username = username.trim();
-
-        // Запрашиваем пароль (скрытый ввод)
-        print!("Введите пароль: ");
-        io::stdout().flush()?;
-        let password = rpassword::read_password()?;
-
-        Self::from_credentials(host, port, database, username, &password).await
-    }
-
-    /// Получить все свечи (исторические данные) для заданной даты
-    ///
-    /// # Аргументы
-    /// * `date` - Дата, для которой нужно получить данные
-    ///
-    /// # Возвращает
-    /// Вектор всех записей BondHistoryData за указанную дату
+    /// Получить все свечи (исторические данные) для заданной даты.
     pub async fn get_candles_by_date(&self, date: NaiveDate) -> Result<Vec<BondHistoryData>> {
-        let candles = sqlx::query_as::<_, BondHistoryData>("SELECT * FROM bond_bondhistorydata WHERE date = $1")
-            .bind(date)
-            .fetch_all(&self.pool)
-            .await?;
-
+        let candles = sqlx::query_as::<_, BondHistoryData>(
+            "SELECT * FROM bond_bondhistorydata WHERE date = $1",
+        )
+        .bind(date)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(candles)
     }
 
-    /// Получить исторические данные для конкретной облигации за дату
-    ///
-    /// # Аргументы
-    /// * `bond_id` - ID облигации
-    /// * `date` - Дата
-    pub async fn get_bond_candle(&self, bond_id: i64, date: NaiveDate) -> Result<Option<BondHistoryData>> {
-        let candle =
-            sqlx::query_as::<_, BondHistoryData>("SELECT * FROM bond_bondhistorydata WHERE bond_id = $1 AND date = $2")
-                .bind(bond_id)
-                .bind(date)
-                .fetch_optional(&self.pool)
-                .await?;
-
+    /// Получить исторические данные для конкретной облигации за дату.
+    pub async fn get_bond_candle(
+        &self,
+        bond_id: i64,
+        date: NaiveDate,
+    ) -> Result<Option<BondHistoryData>> {
+        let candle = sqlx::query_as::<_, BondHistoryData>(
+            "SELECT * FROM bond_bondhistorydata WHERE bond_id = $1 AND date = $2",
+        )
+        .bind(bond_id)
+        .bind(date)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(candle)
     }
 
-    /// Получить исторические данные для облигации за диапазон дат
-    ///
-    /// # Аргументы
-    /// * `bond_id` - ID облигации
-    /// * `start_date` - Начальная дата (включительно)
-    /// * `end_date` - Конечная дата (включительно)
+    /// Получить исторические данные для облигации за диапазон дат.
     pub async fn get_bond_candles_range(
         &self,
         bond_id: i64,
@@ -147,8 +111,8 @@ impl MarketDataClient {
         end_date: NaiveDate,
     ) -> Result<Vec<BondHistoryData>> {
         let candles = sqlx::query_as::<_, BondHistoryData>(
-            "SELECT * FROM bond_bondhistorydata 
-             WHERE bond_id = $1 AND date >= $2 AND date <= $3 
+            "SELECT * FROM bond_bondhistorydata \
+             WHERE bond_id = $1 AND date >= $2 AND date <= $3 \
              ORDER BY date ASC",
         )
         .bind(bond_id)
@@ -156,60 +120,53 @@ impl MarketDataClient {
         .bind(end_date)
         .fetch_all(&self.pool)
         .await?;
-
         Ok(candles)
     }
 
-    /// Получить информацию об облигации по ID
-    ///
-    /// # Аргументы
-    /// * `bond_id` - ID облигации
+    /// Получить информацию об облигации по ID.
     pub async fn get_bond_info(&self, bond_id: i64) -> Result<Option<BondInfo>> {
-        let bond = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE id = $1")
-            .bind(bond_id)
-            .fetch_optional(&self.pool)
-            .await?;
-
+        let bond =
+            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE id = $1")
+                .bind(bond_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(bond)
     }
 
-    /// Получить информацию об облигации по ISIN коду
-    ///
-    /// # Аргументы
-    /// * `isin` - ISIN код облигации
+    /// Получить информацию об облигации по ISIN коду.
     pub async fn get_bond_by_isin(&self, isin: &str) -> Result<Option<BondInfo>> {
-        let bond = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE isin = $1")
-            .bind(isin)
-            .fetch_optional(&self.pool)
-            .await?;
-
+        let bond =
+            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE isin = $1")
+                .bind(isin)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(bond)
     }
 
-    /// Получить список всех облигаций
-    ///
-    /// # Аргументы
-    /// * `limit` - Максимальное количество записей (опционально)
-    /// * `offset` - Смещение для пагинации (опционально)
-    pub async fn get_all_bonds(&self, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<BondInfo>> {
+    /// Получить список облигаций с пагинацией.
+    pub async fn get_all_bonds(
+        &self,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> Result<Vec<BondInfo>> {
         let limit = limit.unwrap_or(1000);
         let offset = offset.unwrap_or(0);
-
-        let bonds = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond ORDER BY id LIMIT $1 OFFSET $2")
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&self.pool)
-            .await?;
-
+        let bonds = sqlx::query_as::<_, BondInfo>(
+            "SELECT * FROM bond_bond ORDER BY id LIMIT $1 OFFSET $2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(bonds)
     }
 
-    /// Получить только торгуемые облигации
+    /// Получить только торгуемые облигации.
     pub async fn get_traded_bonds(&self) -> Result<Vec<BondInfo>> {
-        let bonds = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE is_traded = true")
-            .fetch_all(&self.pool)
-            .await?;
-
+        let bonds =
+            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE is_traded = true")
+                .fetch_all(&self.pool)
+                .await?;
         Ok(bonds)
     }
 }
