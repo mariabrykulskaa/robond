@@ -2,6 +2,7 @@
 //!
 //! # TODO
 //!
+//! - Добавить комментарии к полям структуры `Client`
 //! - Добавить добавление заголовков x-tracking-id и AppName в интерсептор
 //! - Зарелизить крейт на crates.io
 //!
@@ -36,13 +37,18 @@
 //! }
 //! ```
 
-pub mod error;
+#![warn(missing_docs)]
 
+#[allow(missing_docs)]
 #[allow(clippy::all)]
 /// Код, сгенерированный из protobuf-контракта T-Invest API
 pub mod proto {
     tonic::include_proto!("tinkoff.public.invest.api.contract.v1");
 }
+
+mod error;
+
+pub use error::{Error, Result};
 
 pub use tonic::Request;
 
@@ -52,8 +58,6 @@ use tonic::{
     service::{Interceptor, interceptor::InterceptedService},
     transport::{Channel, ClientTlsConfig, Endpoint},
 };
-
-use error::Result;
 
 // Подключаем клиенты для всех сервисов
 use proto::{
@@ -69,21 +73,32 @@ use proto::{
 /// Клиент для взаимодействия с T-Invest API
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub instruments: InstrumentsServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub market_data: MarketDataServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub market_data_stream: MarketDataStreamServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub operations: OperationsServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub operations_stream: OperationsStreamServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub orders: OrdersServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub orders_stream: OrdersStreamServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub sandbox: SandboxServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub signal: SignalServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub stop_orders: StopOrdersServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub users: UsersServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    #[allow(missing_docs)]
+    pub instruments: InstrumentsServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub market_data: MarketDataServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub market_data_stream: MarketDataStreamServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub operations: OperationsServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub operations_stream: OperationsStreamServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub orders: OrdersServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub orders_stream: OrdersStreamServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub sandbox: SandboxServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub signal: SignalServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub stop_orders: StopOrdersServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
+    #[allow(missing_docs)]
+    pub users: UsersServiceClient<InterceptedService<Channel, AuthorizationInterceptor>>,
 }
 
 /// Контур API: прод или песочница
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum EndPoint {
     /// Продовый контур
     Prod,
@@ -100,12 +115,13 @@ impl EndPoint {
     }
 }
 
+/// Интерсептор gRPC-клиента, добавляющий к каждому запросу заголовок `Authorization: Bearer <token>`.
 #[derive(Clone)]
-pub struct AuthInterceptor {
+pub struct AuthorizationInterceptor {
     authorization_header_value: MetadataValue<Ascii>,
 }
 
-impl Interceptor for AuthInterceptor {
+impl Interceptor for AuthorizationInterceptor {
     fn call(&mut self, mut request: Request<()>) -> std::result::Result<Request<()>, Status> {
         request
             .metadata_mut()
@@ -118,7 +134,7 @@ impl Client {
     /// Создаёт новый клиент для взаимодействия с T-Invest API
     pub async fn try_new(authorization_token: String, end_point: EndPoint) -> Result<Self> {
         let authorization_header_value: MetadataValue<Ascii> = format!("Bearer {}", authorization_token).parse()?;
-        let interceptor = AuthInterceptor {
+        let interceptor = AuthorizationInterceptor {
             authorization_header_value,
         };
 
@@ -153,6 +169,6 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_authorization_token_characters() {
         let error = Client::try_new("\n".to_string(), EndPoint::Prod).await.unwrap_err();
-        assert!(matches!(error, error::Error::InvalidAuthorizationTokenCharacters(_)));
+        assert!(matches!(error, Error::InvalidAuthorizationTokenCharacters(_)));
     }
 }
