@@ -7,6 +7,7 @@ members = [
 [workspace.dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 chrono = "0.4.43"
+thiserror = "2.0.18"
 
 tonic = { version = "0.14.2", features = ["tls-native-roots", "tls-ring", "gzip"] }
 prost = "0.14.3"
