@@ -1,5 +1,5 @@
 //! Пример использования backtest_engine
-//! 
+//!
 //! Запуск: cargo run --package backtest_engine --example simple_backtest
 
 use std::collections::HashMap;

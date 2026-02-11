@@ -68,11 +68,7 @@ impl MarketSimulator {
 
     /// Обрабатывает рыночный ордер (покупка или продажа)
     /// Цена берётся как средняя между low и high в свечке
-    pub fn execute_order(
-        &mut self,
-        order: MarketOrder,
-        use_mid_price: bool,
-    ) -> Result<TradeEvent, String> {
+    pub fn execute_order(&mut self, order: MarketOrder, use_mid_price: bool) -> Result<TradeEvent, String> {
         let key = (self.current_date, order.isin.clone());
 
         let (_open, close, low, high, _volume, facevalue) = self
@@ -82,11 +78,7 @@ impl MarketSimulator {
             .ok_or_else(|| format!("Нет данных о цене для {} на {}", order.isin, self.current_date))?;
 
         // Используем среднюю цену (середину между low и high)
-        let execution_price = if use_mid_price {
-            (low + high) / 2.0
-        } else {
-            close
-        };
+        let execution_price = if use_mid_price { (low + high) / 2.0 } else { close };
 
         // Рассчитываем размер позиции в абсолютных рублях (используя расчётную стоимость)
         let amount_in_rubles = (execution_price / 100.0) * facevalue * order.count as f64;
