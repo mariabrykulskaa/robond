@@ -78,28 +78,21 @@ impl MarketDataClient {
 
     /// Получить все свечи (исторические данные) для заданной даты.
     pub async fn get_candles_by_date(&self, date: NaiveDate) -> Result<Vec<BondHistoryData>> {
-        let candles = sqlx::query_as::<_, BondHistoryData>(
-            "SELECT * FROM bond_bondhistorydata WHERE date = $1",
-        )
-        .bind(date)
-        .fetch_all(&self.pool)
-        .await?;
+        let candles = sqlx::query_as::<_, BondHistoryData>("SELECT * FROM bond_bondhistorydata WHERE date = $1")
+            .bind(date)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(candles)
     }
 
     /// Получить исторические данные для конкретной облигации за дату.
-    pub async fn get_bond_candle(
-        &self,
-        bond_id: i64,
-        date: NaiveDate,
-    ) -> Result<Option<BondHistoryData>> {
-        let candle = sqlx::query_as::<_, BondHistoryData>(
-            "SELECT * FROM bond_bondhistorydata WHERE bond_id = $1 AND date = $2",
-        )
-        .bind(bond_id)
-        .bind(date)
-        .fetch_optional(&self.pool)
-        .await?;
+    pub async fn get_bond_candle(&self, bond_id: i64, date: NaiveDate) -> Result<Option<BondHistoryData>> {
+        let candle =
+            sqlx::query_as::<_, BondHistoryData>("SELECT * FROM bond_bondhistorydata WHERE bond_id = $1 AND date = $2")
+                .bind(bond_id)
+                .bind(date)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(candle)
     }
 
@@ -125,48 +118,39 @@ impl MarketDataClient {
 
     /// Получить информацию об облигации по ID.
     pub async fn get_bond_info(&self, bond_id: i64) -> Result<Option<BondInfo>> {
-        let bond =
-            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE id = $1")
-                .bind(bond_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let bond = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE id = $1")
+            .bind(bond_id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(bond)
     }
 
     /// Получить информацию об облигации по ISIN коду.
     pub async fn get_bond_by_isin(&self, isin: &str) -> Result<Option<BondInfo>> {
-        let bond =
-            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE isin = $1")
-                .bind(isin)
-                .fetch_optional(&self.pool)
-                .await?;
+        let bond = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE isin = $1")
+            .bind(isin)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(bond)
     }
 
     /// Получить список облигаций с пагинацией.
-    pub async fn get_all_bonds(
-        &self,
-        limit: Option<i64>,
-        offset: Option<i64>,
-    ) -> Result<Vec<BondInfo>> {
+    pub async fn get_all_bonds(&self, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<BondInfo>> {
         let limit = limit.unwrap_or(1000);
         let offset = offset.unwrap_or(0);
-        let bonds = sqlx::query_as::<_, BondInfo>(
-            "SELECT * FROM bond_bond ORDER BY id LIMIT $1 OFFSET $2",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
+        let bonds = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond ORDER BY id LIMIT $1 OFFSET $2")
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(bonds)
     }
 
     /// Получить только торгуемые облигации.
     pub async fn get_traded_bonds(&self) -> Result<Vec<BondInfo>> {
-        let bonds =
-            sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE is_traded = true")
-                .fetch_all(&self.pool)
-                .await?;
+        let bonds = sqlx::query_as::<_, BondInfo>("SELECT * FROM bond_bond WHERE is_traded = true")
+            .fetch_all(&self.pool)
+            .await?;
         Ok(bonds)
     }
 }

@@ -31,8 +31,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Подключено. Получаем данные за {year}-{month:02}...");
 
     // --- диапазон дат месяца ---
-    let start = NaiveDate::from_ymd_opt(year, month, 1)
-        .expect("некорректный месяц");
+    let start = NaiveDate::from_ymd_opt(year, month, 1).expect("некорректный месяц");
     let end = last_day_of_month(year, month);
 
     // --- загрузка всех свечей за месяц одним запросом ---
@@ -72,11 +71,7 @@ async fn main() -> anyhow::Result<()> {
 
 fn last_day_of_month(year: i32, month: u32) -> NaiveDate {
     // первый день следующего месяца минус 1 день
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
-    };
+    let (next_year, next_month) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
     NaiveDate::from_ymd_opt(next_year, next_month, 1)
         .unwrap()
         .pred_opt()
