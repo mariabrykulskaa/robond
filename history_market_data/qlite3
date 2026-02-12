@@ -1,0 +1,18 @@
+                               Table "public.bond_coupon"
+   Column    |   Type   | Collation | Nullable |                 Default                 
+-------------+----------+-----------+----------+-----------------------------------------
+ id          | bigint   |           | not null | nextval('bond_coupon_id_seq'::regclass)
+ description | text     |           |          | 
+ size        | real     |           |          | 
+ aci         | real     |           |          | 
+ period      | smallint |           |          | 
+ type_id     | bigint   |           |          | 
+ sum         | real     |           |          | 
+Indexes:
+    "idx_16647_bond_coupon_pkey" PRIMARY KEY, btree (id)
+    "idx_16647_bond_coupon_type_id_6962a1f8" btree (type_id)
+Foreign-key constraints:
+    "bond_coupon_type_id_fkey" FOREIGN KEY (type_id) REFERENCES bond_coupontype(id)
+Referenced by:
+    TABLE "bond_bond" CONSTRAINT "bond_bond_coupon_id_fkey" FOREIGN KEY (coupon_id) REFERENCES bond_coupon(id)
+
