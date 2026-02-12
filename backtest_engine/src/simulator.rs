@@ -6,6 +6,9 @@ use trading_strategies::{MarketOrder, MarketOrderType, Money, Portfolio};
 
 use crate::models::{PaymentEvent, TradeEvent};
 
+/// (open, close, low, high, volume, facevalue)
+type PriceEntry = (f64, f64, f64, f64, f64, f64);
+
 /// Основной симулятор рынка и портфеля
 pub struct MarketSimulator {
     /// Текущий день симуляции
@@ -17,7 +20,7 @@ pub struct MarketSimulator {
     /// История платежей
     pub payments: Vec<PaymentEvent>,
     /// Кешированные цены: (дата, ISIN) -> (open, close, low, high, volume, facevalue)
-    pub price_cache: HashMap<(NaiveDate, String), (f64, f64, f64, f64, f64, f64)>,
+    pub price_cache: HashMap<(NaiveDate, String), PriceEntry>,
     /// Количество облигаций в портфеле: ISIN -> кол-во
     pub holdings: HashMap<String, i64>,
     /// Номиналы облигаций: ISIN -> номинал
@@ -47,6 +50,7 @@ impl MarketSimulator {
     }
 
     /// Кеширует цены для дня
+    #[allow(clippy::too_many_arguments)]
     pub fn cache_prices(
         &mut self,
         isin: String,
@@ -61,9 +65,7 @@ impl MarketSimulator {
             (self.current_date, isin.clone()),
             (open, close, low, high, volume, facevalue),
         );
-        if !self.facevalues.contains_key(&isin) {
-            self.facevalues.insert(isin, facevalue);
-        }
+        self.facevalues.entry(isin).or_insert(facevalue);
     }
 
     /// Обрабатывает рыночный ордер (покупка или продажа)
