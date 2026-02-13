@@ -44,10 +44,8 @@ impl BacktestEngine {
     pub async fn run_backtest(&self, strategy: &dyn Strategy) -> Result<BacktestResult, anyhow::Error> {
         // Один раз загружаем список облигаций и строим маппинг bond_id -> ISIN.
         let all_bonds = self.market_data.get_all_bonds(None, None).await?;
-        let bond_id_to_isin: HashMap<i64, Isin> = all_bonds
-            .iter()
-            .filter_map(|b| Some((b.id, b.isin.clone()?)))
-            .collect();
+        let bond_id_to_isin: HashMap<i64, Isin> =
+            all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
 
         // Загружаем все выплаты за период бэктеста одним запросом.
         // type_id: 1 = амортизация, 2 = купон, 14 = погашение.
@@ -129,11 +127,7 @@ impl BacktestEngine {
                     if *payment_date == current_date {
                         if let Some(&facevalue) = simulator.facevalues.get(isin) {
                             let amount_percent = (amount_rubles / facevalue) * 100.0;
-                            simulator.process_payment(
-                                isin.clone(),
-                                amount_percent,
-                                payment_type.to_string(),
-                            );
+                            simulator.process_payment(isin.clone(), amount_percent, payment_type.to_string());
                         }
                     }
                 }
