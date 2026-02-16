@@ -6,6 +6,11 @@
 //! - Добавить добавление заголовков x-tracking-id и AppName в интерсептор
 //! - Зарелизить крейт на crates.io
 //!
+//! # Feature-флаги
+//!
+//! - `decimal` — включает модуль `decimal` с преобразованиями между
+//!   `proto::Quotation` и `rust_decimal::Decimal`.
+//!
 //! # Пример
 //!
 //! ```no_run
@@ -47,6 +52,9 @@ pub mod proto {
 }
 
 mod error;
+
+#[cfg(feature = "decimal")]
+pub mod decimal;
 
 pub use error::{Error, Result};
 

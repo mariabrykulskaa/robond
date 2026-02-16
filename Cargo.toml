@@ -15,4 +15,6 @@ prost-types = "0.14.3"
 tonic-prost = "0.14.2"
 tonic-prost-build = "0.14.2"
 
-t-invest-api-rust = { path = "t-invest-api-rust" }
+t-invest-api-rust = { path = "t-invest-api-rust", features = ["decimal"] }
+
+rust_decimal = { version = "1.40.0", features = ["macros"] }
