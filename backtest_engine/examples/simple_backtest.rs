@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use backtest_engine::BacktestEngine;
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use trading_strategies::{BondPersistentInfo, Isin, MarketOrder, Portfolio, Strategy};
 
 /// Стратегия-заглушка: ничего не делает, позволяет проверить движок без логики.
@@ -18,7 +20,7 @@ impl Strategy for DoNothingStrategy {
         _date: NaiveDate,
         _portfolio: &Portfolio,
         _bonds_info: &HashMap<Isin, BondPersistentInfo>,
-        _bonds_prices: &HashMap<Isin, trading_strategies::Money>,
+        _bonds_prices: &HashMap<Isin, Decimal>,
     ) -> Vec<MarketOrder> {
         vec![]
     }
@@ -37,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("[2/3] Инициализирую движок бэктеста...");
     let start_date = NaiveDate::from_ymd_opt(2025, 1, 1).expect("valid date");
     let end_date = NaiveDate::from_ymd_opt(2025, 12, 31).expect("valid date");
-    let initial_capital = 1_000_000i64;
+    let initial_capital = Decimal::from(1_000_000_i64);
 
     let engine = BacktestEngine::new(client, initial_capital, start_date, end_date);
     println!("✓ Параметры движка:");
@@ -51,7 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Выводим результаты
     println!("=== РЕЗУЛЬТАТЫ БЭКТЕСТА ===\n");
-    println!("Начальный капитал:    {:>15.2} руб", result.initial_capital as f64);
+    println!(
+        "Начальный капитал:    {:>15.2} руб",
+        result.initial_capital.to_f64().unwrap_or(0.0)
+    );
     println!("Финальная стоимость:  {:>15.2} руб", result.final_value);
     println!("Прибыль/Убыток:       {:>15.2} руб", result.profit_loss);
     println!("Возврат:              {:>15.2} %", result.return_percent);
