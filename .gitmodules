@@ -1,3 +1,3 @@
-[submodule "t-invest-api-rust/invest-contracts"]
-	path = t-invest-api-rust/invest-contracts
-	url = https://opensource.tbank.ru/invest/invest-contracts
+#[submodule "t-invest-api-rust/invest-contracts"]
+#	path = t-invest-api-rust/invest-contracts
+#	url = https://opensource.tbank.ru/invest/invest-contracts
