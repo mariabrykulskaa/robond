@@ -1,9 +1,9 @@
 //! Модели данных для симуляции
 
 use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use trading_strategies::Money;
 
 /// Результат одной торговой операции
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +45,7 @@ pub struct PortfolioSnapshot {
     /// Дата снимка
     pub date: NaiveDate,
     /// Свободная денежная сумма
-    pub cash: Money,
+    pub cash: Decimal,
     /// Состав портфеля (ISIN -> количество)
     pub positions: HashMap<String, i64>,
     /// Оценочная стоимость портфеля по market price
@@ -58,7 +58,7 @@ pub struct PortfolioSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BacktestResult {
     /// Начальный капитал
-    pub initial_capital: Money,
+    pub initial_capital: Decimal,
     /// Финальная стоимость портфеля
     pub final_value: f64,
     /// Прибыль/убыток

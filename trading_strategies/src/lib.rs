@@ -5,11 +5,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
-
-/// Денежная сумма в некоторых единицах.
-///
-/// TODO: определиться с тем, что это за единицы
-pub type Money = i64;
+use rust_decimal::Decimal;
 
 /// Идентификатор бумаги (ISIN).
 pub type Isin = String;
@@ -18,7 +14,7 @@ pub type Isin = String;
 #[derive(Debug, Clone)]
 pub struct Portfolio {
     /// Свободная денежная сумма
-    pub free_money: Money,
+    pub free_money: Decimal,
     /// Количество облигаций в портфеле
     pub bonds_count: HashMap<Isin, i64>,
 }
@@ -27,7 +23,7 @@ pub struct Portfolio {
 #[derive(Debug, Clone)]
 pub struct BondPersistentInfo {
     /// Выплаты по купонам и номиналу: дата и сумма.
-    pub payments: Vec<(NaiveDate, Money)>,
+    pub payments: Vec<(NaiveDate, Decimal)>,
 }
 
 /// Тип рыночного торгового поручения
@@ -56,6 +52,6 @@ pub trait Strategy {
         current_date: NaiveDate,
         portfolio: &Portfolio,
         bonds_info: &HashMap<Isin, BondPersistentInfo>,
-        bonds_prices: &HashMap<Isin, Money>,
+        bonds_prices: &HashMap<Isin, Decimal>,
     ) -> Vec<MarketOrder>;
 }
