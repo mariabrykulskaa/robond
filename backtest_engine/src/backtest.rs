@@ -80,9 +80,13 @@ impl BacktestEngine {
                 .push((date, size as f64, type_name));
         }
 
-        // Строим bonds_info для стратегии: теперь содержит типизированные выплаты из БД.
+        // ID рублёвой валюты (SUR) в таблице bond_currency.
+        const RUB_CURRENCY_ID: i64 = 3;
+
+        // Строим bonds_info для стратегии: только рублёвые облигации.
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
             .iter()
+            .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
             .filter_map(|bond| {
                 let isin = bond.isin.clone()?;
                 let payments = bonds_payments
@@ -105,6 +109,8 @@ impl BacktestEngine {
                     })
                     .unwrap_or_default();
                 let bond_info = BondCommonInfo {
+                    isin: isin.clone(),
+                    currency_id: bond.currency_id,
                     title: bond.title.clone(),
                     is_subordinated: bond.is_subordinated,
                     issue_volume: bond.issue_volume,
