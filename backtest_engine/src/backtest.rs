@@ -44,17 +44,48 @@ impl BacktestEngine {
     /// 4. Исполняет ордера, которые вернула стратегия.
     /// 5. Сохраняет снимок портфеля.
     pub async fn run_backtest(&self, strategy: &dyn Strategy) -> Result<BacktestResult, anyhow::Error> {
+        use std::time::Instant;
+        let t0 = Instant::now();
+
         // Один раз загружаем список облигаций и строим маппинг bond_id -> ISIN.
+        eprintln!("  Загрузка списка облигаций из БД...");
         let all_bonds = self.market_data.get_all_bonds(None, None).await?;
         let bond_id_to_isin: HashMap<i64, Isin> =
             all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
+        eprintln!("  ✓ Загружено {} облигаций ({:.1}с)", all_bonds.len(), t0.elapsed().as_secs_f64());
+
+        // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
+        eprintln!(
+            "  Загрузка всех свечей за период {}..{} ...",
+            self.start_date, self.end_date
+        );
+        let t_candles = Instant::now();
+        let all_candles = self
+            .market_data
+            .get_all_candles_in_range(self.start_date, self.end_date)
+            .await?;
+        eprintln!(
+            "  ✓ Загружено {} свечей ({:.1}с)",
+            all_candles.len(),
+            t_candles.elapsed().as_secs_f64()
+        );
+
+        // Индексируем свечи по дате для O(1) доступа в дневном цикле.
+        let mut candles_by_date: HashMap<NaiveDate, Vec<&history_market_data::BondHistoryData>> =
+            HashMap::new();
+        for candle in &all_candles {
+            candles_by_date.entry(candle.date).or_default().push(candle);
+        }
 
         // Загружаем все выплаты за период бэктеста одним запросом.
         // type_id: 1 = амортизация, 2 = купон, 14 = погашение.
+        eprintln!("  Загрузка выплат за период {}..{} ...", self.start_date, self.end_date);
+        let t1 = Instant::now();
         let all_payments = self
             .market_data
             .get_all_bond_payments_in_range(self.start_date, self.end_date)
             .await?;
+        eprintln!("  ✓ Загружено {} выплат ({:.1}с)", all_payments.len(), t1.elapsed().as_secs_f64());
 
         // Группируем выплаты по ISIN: (дата, сумма_в_рублях, тип_выплаты).
         let mut bonds_payments: HashMap<Isin, Vec<(NaiveDate, f64, &'static str)>> = HashMap::new();
@@ -84,6 +115,8 @@ impl BacktestEngine {
         const RUB_CURRENCY_ID: i64 = 3;
 
         // Строим bonds_info для стратегии: только рублёвые облигации.
+        eprintln!("  Построение карты облигаций и индексов...");
+        let t2 = Instant::now();
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
             .iter()
             .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
@@ -126,44 +159,70 @@ impl BacktestEngine {
             })
             .collect();
 
+        // Маппинг bond_id -> ISIN для быстрого разрешения свечей без запросов к БД.
+        // (bond_id_to_isin уже построен выше)
+
+        // Индексируем выплаты по дате для O(1) доступа в дневном цикле.
+        let mut payments_by_date: HashMap<NaiveDate, Vec<(Isin, f64, &'static str)>> = HashMap::new();
+        for (isin, payments) in &bonds_payments {
+            for &(date, amount, ptype) in payments {
+                payments_by_date
+                    .entry(date)
+                    .or_default()
+                    .push((isin.clone(), amount, ptype));
+            }
+        }
+
+        eprintln!(
+            "  ✓ {} рублёвых облигаций, выплаты проиндексированы ({:.1}с)",
+            bonds_info.len(),
+            t2.elapsed().as_secs_f64()
+        );
+        eprintln!(
+            "  Инициализация завершена за {:.1}с. Запуск цикла по датам...\n",
+            t0.elapsed().as_secs_f64()
+        );
+
         let mut simulator = MarketSimulator::new(self.initial_capital, self.start_date);
         let mut snapshots = Vec::new();
 
+        let total_days = (self.end_date - self.start_date).num_days() + 1;
         let mut current_date = self.start_date;
+        let mut day_num: i64 = 0;
         while current_date <= self.end_date {
+            day_num += 1;
+            eprintln!(
+                "[{}/{}] {} ...",
+                day_num, total_days, current_date
+            );
             simulator.set_date(current_date);
 
-            // 1. Загружаем свечи и кэшируем цены.
-            let candles = self.market_data.get_candles_by_date(current_date).await?;
-            for candle in candles {
-                let bond = self
-                    .market_data
-                    .get_bond_info(candle.bond_id)
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("Bond not found: {}", candle.bond_id))?;
-
-                let isin = bond.isin.unwrap_or_default();
-                simulator.cache_prices(
-                    isin,
-                    candle.open.unwrap_or(0.0),
-                    candle.close.unwrap_or(0.0),
-                    candle.low.unwrap_or(0.0),
-                    candle.high.unwrap_or(0.0),
-                    candle.volume.unwrap_or(0.0),
-                    candle.facevalue.unwrap_or(100.0),
-                );
+            // 1. Кэшируем цены из предзагруженных свечей.
+            if let Some(candles) = candles_by_date.get(&current_date) {
+                for candle in candles {
+                    let Some(isin) = bond_id_to_isin.get(&candle.bond_id) else {
+                        continue;
+                    };
+                    simulator.cache_prices(
+                        isin.clone(),
+                        candle.open.unwrap_or(0.0),
+                        candle.close.unwrap_or(0.0),
+                        candle.low.unwrap_or(0.0),
+                        candle.high.unwrap_or(0.0),
+                        candle.volume.unwrap_or(0.0),
+                        candle.facevalue.unwrap_or(100.0),
+                    );
+                }
             }
 
             // 2. Применяем купоны, амортизации и погашения, запланированные на текущий день.
             // size из bond_payment хранится в рублях; переводим в % от номинала,
             // потому что process_payment ожидает именно процент.
-            for (isin, payments) in &bonds_payments {
-                for (payment_date, amount_rubles, payment_type) in payments {
-                    if *payment_date == current_date {
-                        if let Some(&facevalue) = simulator.facevalues.get(isin) {
-                            let amount_percent = (amount_rubles / facevalue) * 100.0;
-                            simulator.process_payment(isin.clone(), amount_percent, payment_type.to_string());
-                        }
+            if let Some(today_payments) = payments_by_date.get(&current_date) {
+                for (isin, amount_rubles, payment_type) in today_payments {
+                    if let Some(&facevalue) = simulator.facevalues.get(isin) {
+                        let amount_percent = (amount_rubles / facevalue) * 100.0;
+                        simulator.process_payment(isin.clone(), amount_percent, payment_type.to_string());
                     }
                 }
             }
