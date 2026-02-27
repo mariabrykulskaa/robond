@@ -52,7 +52,11 @@ impl BacktestEngine {
         let all_bonds = self.market_data.get_all_bonds(None, None).await?;
         let bond_id_to_isin: HashMap<i64, Isin> =
             all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
-        eprintln!("  ✓ Загружено {} облигаций ({:.1}с)", all_bonds.len(), t0.elapsed().as_secs_f64());
+        eprintln!(
+            "  ✓ Загружено {} облигаций ({:.1}с)",
+            all_bonds.len(),
+            t0.elapsed().as_secs_f64()
+        );
 
         // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
         eprintln!(
@@ -71,8 +75,7 @@ impl BacktestEngine {
         );
 
         // Индексируем свечи по дате для O(1) доступа в дневном цикле.
-        let mut candles_by_date: HashMap<NaiveDate, Vec<&history_market_data::BondHistoryData>> =
-            HashMap::new();
+        let mut candles_by_date: HashMap<NaiveDate, Vec<&history_market_data::BondHistoryData>> = HashMap::new();
         for candle in &all_candles {
             candles_by_date.entry(candle.date).or_default().push(candle);
         }
@@ -85,7 +88,11 @@ impl BacktestEngine {
             .market_data
             .get_all_bond_payments_in_range(self.start_date, self.end_date)
             .await?;
-        eprintln!("  ✓ Загружено {} выплат ({:.1}с)", all_payments.len(), t1.elapsed().as_secs_f64());
+        eprintln!(
+            "  ✓ Загружено {} выплат ({:.1}с)",
+            all_payments.len(),
+            t1.elapsed().as_secs_f64()
+        );
 
         // Группируем выплаты по ISIN: (дата, сумма_в_рублях, тип_выплаты).
         let mut bonds_payments: HashMap<Isin, Vec<(NaiveDate, f64, &'static str)>> = HashMap::new();
@@ -191,10 +198,7 @@ impl BacktestEngine {
         let mut day_num: i64 = 0;
         while current_date <= self.end_date {
             day_num += 1;
-            eprintln!(
-                "[{}/{}] {} ...",
-                day_num, total_days, current_date
-            );
+            eprintln!("[{}/{}] {} ...", day_num, total_days, current_date);
             simulator.set_date(current_date);
 
             // 1. Кэшируем цены из предзагруженных свечей.
