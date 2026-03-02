@@ -23,7 +23,7 @@ fn calc_yield(current_bond_price: Decimal, current_date: NaiveDate, bond_persist
             //dbg!(dates);
             //panic!("error");
             -1.
-        },
+        }
         Ok(bond_yield) => bond_yield,
     }
 }

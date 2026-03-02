@@ -9,7 +9,9 @@ use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
-use trading_strategies::{BondPersistentInfo, Isin, MarketOrder, Portfolio, Strategy, strategies::MostProfitableBondStrategy};
+use trading_strategies::{
+    strategies::MostProfitableBondStrategy, BondPersistentInfo, Isin, MarketOrder, Portfolio, Strategy,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

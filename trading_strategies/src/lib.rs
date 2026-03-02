@@ -27,7 +27,7 @@ impl Portfolio {
         let mut price = self.free_money;
         for (isin, &count) in self.bonds_count.iter() {
             match bonds_prices.get(isin) {
-                None => {},
+                None => {}
                 Some(bond_price) => price += Decimal::from(count) * bond_price,
             }
         }
