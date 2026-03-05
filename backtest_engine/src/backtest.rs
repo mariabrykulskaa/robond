@@ -215,6 +215,7 @@ impl BacktestEngine {
                         candle.high.unwrap_or(0.0),
                         candle.volume.unwrap_or(0.0),
                         candle.facevalue.unwrap_or(100.0),
+                        candle.accint.unwrap_or(0.0),
                     );
                 }
             }
@@ -236,11 +237,14 @@ impl BacktestEngine {
                 .keys()
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
-                    simulator.price_cache.get(&key).map(|&(_, _, low, high, _, facevalue)| {
-                        let mid_price_rubles =
-                            decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
-                        (isin.clone(), mid_price_rubles)
-                    })
+                    simulator
+                        .price_cache
+                        .get(&key)
+                        .map(|&(_, _, low, high, _, facevalue, _accint)| {
+                            let mid_price_rubles =
+                                decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
+                            (isin.clone(), mid_price_rubles)
+                        })
                 })
                 .collect();
 
