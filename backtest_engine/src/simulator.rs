@@ -27,6 +27,8 @@ pub struct MarketSimulator {
     pub holdings: HashMap<String, i64>,
     /// Номиналы облигаций: ISIN -> номинал
     pub facevalues: HashMap<String, f64>,
+    /// Последняя известная цена для каждой облигации (для оценки портфеля в нерабочие дни)
+    last_known_price: HashMap<String, PriceEntry>,
 }
 
 impl MarketSimulator {
@@ -43,6 +45,7 @@ impl MarketSimulator {
             price_cache: HashMap::new(),
             holdings: HashMap::new(),
             facevalues: HashMap::new(),
+            last_known_price: HashMap::new(),
         }
     }
 
@@ -63,10 +66,9 @@ impl MarketSimulator {
         volume: f64,
         facevalue: f64,
     ) {
-        self.price_cache.insert(
-            (self.current_date, isin.clone()),
-            (open, close, low, high, volume, facevalue),
-        );
+        let entry = (open, close, low, high, volume, facevalue);
+        self.price_cache.insert((self.current_date, isin.clone()), entry);
+        self.last_known_price.insert(isin.clone(), entry);
         self.facevalues.entry(isin).or_insert(facevalue);
     }
 
@@ -163,14 +165,16 @@ impl MarketSimulator {
         Some(event)
     }
 
-    /// Оценивает текущий портфель по рыночным ценам
+    /// Оценивает текущий портфель по рыночным ценам.
+    /// Если в текущий день нет свечи — использует последнюю известную цену закрытия.
     pub fn get_portfolio_value(&self) -> f64 {
         let mut total = self.portfolio.free_money.to_f64().unwrap_or(0.0);
 
         for (isin, quantity) in &self.holdings {
             if *quantity > 0 {
                 let key = (self.current_date, isin.clone());
-                if let Some((_, close, _, _, _, facevalue)) = self.price_cache.get(&key) {
+                let price_entry = self.price_cache.get(&key).or_else(|| self.last_known_price.get(isin));
+                if let Some((_, close, _, _, _, facevalue)) = price_entry {
                     let position_value = (close / 100.0) * facevalue * *quantity as f64;
                     total += position_value;
                 }
