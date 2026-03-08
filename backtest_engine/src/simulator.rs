@@ -8,8 +8,8 @@ use trading_strategies::{MarketOrder, MarketOrderType, Portfolio};
 
 use crate::models::{PaymentEvent, TradeEvent};
 
-/// (open, close, low, high, volume, facevalue)
-type PriceEntry = (f64, f64, f64, f64, f64, f64);
+/// (open, close, low, high, volume, facevalue, accint)
+type PriceEntry = (f64, f64, f64, f64, f64, f64, f64);
 
 /// Основной симулятор рынка и портфеля
 pub struct MarketSimulator {
@@ -21,7 +21,7 @@ pub struct MarketSimulator {
     pub trades: Vec<TradeEvent>,
     /// История платежей
     pub payments: Vec<PaymentEvent>,
-    /// Кешированные цены: (дата, ISIN) -> (open, close, low, high, volume, facevalue)
+    /// Кешированные цены: (дата, ISIN) -> (open, close, low, high, volume, facevalue, accint)
     pub price_cache: HashMap<(NaiveDate, String), PriceEntry>,
     /// Количество облигаций в портфеле: ISIN -> кол-во
     pub holdings: HashMap<String, i64>,
@@ -65,8 +65,9 @@ impl MarketSimulator {
         high: f64,
         volume: f64,
         facevalue: f64,
+        accint: f64,
     ) {
-        let entry = (open, close, low, high, volume, facevalue);
+        let entry = (open, close, low, high, volume, facevalue, accint);
         self.price_cache.insert((self.current_date, isin.clone()), entry);
         self.last_known_price.insert(isin.clone(), entry);
         self.facevalues.entry(isin).or_insert(facevalue);
@@ -77,7 +78,7 @@ impl MarketSimulator {
     pub fn execute_order(&mut self, order: MarketOrder, use_mid_price: bool) -> Result<TradeEvent, String> {
         let key = (self.current_date, order.isin.clone());
 
-        let (_open, close, low, high, _volume, facevalue) = self
+        let (_open, close, low, high, _volume, facevalue, accint) = self
             .price_cache
             .get(&key)
             .copied()
@@ -86,8 +87,10 @@ impl MarketSimulator {
         // Используем среднюю цену (середину между low и high)
         let execution_price = if use_mid_price { (low + high) / 2.0 } else { close };
 
-        // Рассчитываем размер позиции в абсолютных рублях (используя расчётную стоимость)
-        let amount_in_rubles = (execution_price / 100.0) * facevalue * order.count as f64;
+        // Рассчитываем размер позиции в абсолютных рублях: цена облигации + НКД на единицу
+        let price_per_unit = (execution_price / 100.0) * facevalue;
+        let total_per_unit = price_per_unit + accint;
+        let amount_in_rubles = total_per_unit * order.count as f64;
         let amount_decimal = decimal_from_f64(amount_in_rubles)?;
 
         match order.order_type {
@@ -124,6 +127,7 @@ impl MarketSimulator {
             isin: order.isin,
             quantity: order.count,
             price: execution_price,
+            accint,
             total_amount: amount_in_rubles,
             side: match order.order_type {
                 MarketOrderType::Buy => "buy".to_string(),
@@ -174,9 +178,9 @@ impl MarketSimulator {
             if *quantity > 0 {
                 let key = (self.current_date, isin.clone());
                 let price_entry = self.price_cache.get(&key).or_else(|| self.last_known_price.get(isin));
-                if let Some((_, close, _, _, _, facevalue)) = price_entry {
-                    let position_value = (close / 100.0) * facevalue * *quantity as f64;
-                    total += position_value;
+                if let Some(&(_, close, _, _, _, facevalue, accint)) = price_entry {
+                    let price_per_unit = (close / 100.0) * facevalue + accint;
+                    total += price_per_unit * *quantity as f64;
                 }
             }
         }
