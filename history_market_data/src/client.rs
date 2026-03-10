@@ -138,6 +138,18 @@ impl MarketDataClient {
         Ok(candles)
     }
 
+    /// Получить ID облигаций, у которых есть хотя бы одна оферта.
+    /// Типы оферт: 3–13, 15–18 (всё кроме 1=амортизация, 2=купон, 14=погашение).
+    pub async fn get_bond_ids_with_offers(&self) -> Result<Vec<i64>> {
+        let rows = sqlx::query_scalar::<_, i64>(
+            "SELECT DISTINCT bond_id FROM bond_payment \
+             WHERE type_id NOT IN (1, 2, 14) AND bond_id IS NOT NULL",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     /// Получить все выплаты (купоны, амортизации, погашения) за период бэктеста.
     ///
     /// Возвращает только записи с type_id IN (1=амортизация, 2=купон, 14=погашение)
