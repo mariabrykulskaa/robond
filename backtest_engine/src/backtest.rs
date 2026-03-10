@@ -68,6 +68,16 @@ impl BacktestEngine {
             t_offers.elapsed().as_secs_f64()
         );
 
+        // Загружаем купонную информацию для всех облигаций одним запросом.
+        eprintln!("  Загрузка купонной информации...");
+        let t_coupons = Instant::now();
+        let bond_coupons = self.market_data.get_all_bond_coupons().await?;
+        eprintln!(
+            "  ✓ Купоны для {} облигаций ({:.1}с)",
+            bond_coupons.len(),
+            t_coupons.elapsed().as_secs_f64()
+        );
+
         // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
         eprintln!(
             "  Загрузка всех свечей за период {}..{} ...",
@@ -176,6 +186,9 @@ impl BacktestEngine {
                     board: bond.board.clone(),
                     is_for_qualified_investors: bond.is_for_qualified_investors,
                     is_traded: bond.is_traded,
+                    coupon_size: bond_coupons.get(&bond.id).and_then(|c| c.size.map(|v| v as f64)),
+                    coupon_period: bond_coupons.get(&bond.id).and_then(|c| c.period),
+                    coupon_aci: bond_coupons.get(&bond.id).and_then(|c| c.aci.map(|v| v as f64)),
                 };
                 Some((isin, BondPersistentInfo { bond_info, payments }))
             })
