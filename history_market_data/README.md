@@ -44,18 +44,37 @@
 
 ### Подключение к базе данных
 
-**`MarketDataClient::new(database_url: &str)`**
-- Параметры: URL подключения в формате `postgresql://username:password@host:port/database`
-- Возвращает: `Result<MarketDataClient>`
+**`MarketDataClient::from_env()`** - единственный способ подключения
 
-**`MarketDataClient::from_credentials(host: &str, port: u16, database: &str, username: &str, password: &str)`**
-- Параметры: хост, порт, имя БД, логин, пароль
-- Возвращает: `Result<MarketDataClient>`
+Читает учетные данные из `.env` файла:
+- `DB_HOST` - Хост базы данных
+- `DB_PORT` - Порт подключения
+- `DB_NAME` - Имя базы данных
+- `DB_USERNAME` - Имя пользователя
+- `DB_PASSWORD` - Пароль
 
-**`MarketDataClient::connect_interactive(host: &str, port: u16, database: &str)`**
-- Параметры: хост, порт, имя БД
-- Запрашивает логин и пароль из консоли (рекомендуется для публичных репозиториев)
-- Возвращает: `Result<MarketDataClient>`
+**Инструкция:**
+
+1. Скопируй `.env.example` в `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Отредактируй `.env` с реальными данными подключения:
+   ```env
+   DB_HOST=79.174.88.198
+   DB_PORT=16305
+   DB_NAME=HedgehogFinanceDB
+   DB_USERNAME=your_username
+   DB_PASSWORD=your_password
+   ```
+
+3. Используй в коде:
+   ```rust
+   let client = MarketDataClient::from_env().await?;
+   ```
+
+Учетные данные хранятся в `.env`, который находится в `.gitignore` для безопасности.
 
 ### Получение исторических данных
 
@@ -97,3 +116,4 @@
 - `chrono` - работа с датами
 - `serde` - сериализация/десериализация
 - `anyhow` - обработка ошибок
+- `dotenvy` - загрузка переменных окружения из .env файла

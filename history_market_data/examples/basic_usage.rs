@@ -1,26 +1,13 @@
 use chrono::NaiveDate;
-use history_market_data::MarketDataClient;
+use history_market_data::{DbConfig, MarketDataClient};
 
 /// Пример использования модуля history_market_data
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Способ 1: Интерактивный ввод логина и пароля из консоли
-    println!("Подключение к базе данных...");
-    let client = MarketDataClient::connect_interactive("79.174.88.198", 16305, "HedgehogFinanceDB").await?;
-
-    // Способ 2: Передать логин и пароль как параметры (закомментирован)
-    // let client = MarketDataClient::from_credentials(
-    //     "79.174.88.198",
-    //     16305,
-    //     "HedgehogFinanceDB",
-    //     "username",
-    //     "password"
-    // ).await?;
-
-    // Способ 3: Полный database URL (закомментирован)
-    // let database_url = "postgresql://username:password@79.174.88.198:16305/HedgehogFinanceDB";
-    // let client = MarketDataClient::new(database_url).await?;
-
+    println!("Подключение к базе данных из .env...");
+    // Рекомендуемый способ: конфиг отдельно, клиент отдельно
+    let config = DbConfig::from_env()?;
+    let client = MarketDataClient::with_config(&config).await?;
     println!("✓ Подключение установлено");
 
     // Пример 1: Получить все свечи за определенную дату
@@ -40,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
         println!("  Volume: {:?}", first_candle.volume);
         println!("  Num trades: {:?}", first_candle.num_trades);
     }
-
+ 
     // Пример 2: Получить информацию об облигации по ISIN
     println!("\n=== Пример 2: Поиск облигации по ISIN ===");
     let isin = "RU000A10BS76";
