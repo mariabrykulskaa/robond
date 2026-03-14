@@ -13,17 +13,17 @@
 //!     Client, EndPoint, Request,
 //!     proto::{GetInfoRequest, GetLastPricesRequest, InstrumentStatus, LastPriceType},
 //! };
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() {
 //!     let authorization_token = fs::read_to_string("authorization_token.txt").unwrap();
 //!     let mut client = Client::try_new(authorization_token, EndPoint::Prod).await.unwrap();
-//! 
+//!
 //!     let request = GetInfoRequest {};
 //!     let request = Request::new(request);
 //!     let response = client.users.get_info(request).await.unwrap().into_inner();
 //!     dbg!(&response);
-//! 
+//!
 //!     let mut request = GetLastPricesRequest {
 //!         instrument_id: vec!["T_TQBR".to_string()],
 //!         ..GetLastPricesRequest::default()
