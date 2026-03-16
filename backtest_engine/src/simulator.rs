@@ -27,6 +27,8 @@ pub struct MarketSimulator {
     pub holdings: HashMap<String, i64>,
     /// Номиналы облигаций: ISIN -> номинал
     pub facevalues: HashMap<String, f64>,
+    /// Объём выпуска: ISIN -> issue_volume (штук)
+    pub issue_volumes: HashMap<String, i64>,
     /// Последняя известная цена для каждой облигации (для оценки портфеля в нерабочие дни)
     last_known_price: HashMap<String, PriceEntry>,
 }
@@ -45,6 +47,7 @@ impl MarketSimulator {
             price_cache: HashMap::new(),
             holdings: HashMap::new(),
             facevalues: HashMap::new(),
+            issue_volumes: HashMap::new(),
             last_known_price: HashMap::new(),
         }
     }
@@ -78,11 +81,30 @@ impl MarketSimulator {
     pub fn execute_order(&mut self, order: MarketOrder, use_mid_price: bool) -> Result<TradeEvent, String> {
         let key = (self.current_date, order.isin.clone());
 
-        let (_open, close, low, high, _volume, facevalue, accint) = self
+        let (_open, close, low, high, volume, facevalue, accint) = self
             .price_cache
             .get(&key)
             .copied()
             .ok_or_else(|| format!("Нет данных о цене для {} на {}", order.isin, self.current_date))?;
+
+        // Ограничиваем покупку дневным объёмом торгов и объёмом выпуска.
+        if order.order_type == MarketOrderType::Buy {
+            let day_volume = volume as i64;
+            if day_volume > 0 && order.count > day_volume {
+                return Err(format!(
+                    "Превышен дневной объём торгов для {}: запрошено {}, доступно {}",
+                    order.isin, order.count, day_volume
+                ));
+            }
+            if let Some(&issue_vol) = self.issue_volumes.get(&order.isin) {
+                if issue_vol > 0 && order.count > issue_vol {
+                    return Err(format!(
+                        "Превышен объём выпуска для {}: запрошено {}, выпуск {}",
+                        order.isin, order.count, issue_vol
+                    ));
+                }
+            }
+        }
 
         // Используем среднюю цену (середину между low и high)
         let execution_price = if use_mid_price { (low + high) / 2.0 } else { close };
@@ -165,6 +187,32 @@ impl MarketSimulator {
             payment_type,
         };
 
+        self.payments.push(event.clone());
+        Some(event)
+    }
+
+    /// Принудительное погашение облигации по оферте (выкуп по номиналу).
+    /// Зачисляет facevalue * quantity на счёт и обнуляет позицию.
+    pub fn force_redeem_bond(&mut self, isin: &str) -> Option<PaymentEvent> {
+        let quantity = *self.holdings.get(isin)?;
+        if quantity == 0 {
+            return None;
+        }
+        let facevalue = *self.facevalues.get(isin)?;
+        let total_amount = facevalue * quantity as f64;
+
+        self.portfolio.free_money += decimal_from_f64_option(total_amount)?;
+        self.holdings.insert(isin.to_string(), 0);
+        self.portfolio.bonds_count.insert(isin.to_string(), 0);
+
+        let event = PaymentEvent {
+            date: self.current_date,
+            isin: isin.to_string(),
+            quantity,
+            amount_per_unit: facevalue,
+            total_amount,
+            payment_type: "offer_redemption".to_string(),
+        };
         self.payments.push(event.clone());
         Some(event)
     }
