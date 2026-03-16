@@ -2,16 +2,12 @@
 //!
 //! Запуск: cargo run --package backtest_engine --example most_profitable_bond_backtest --release
 
-use std::collections::HashMap;
-
 use backtest_engine::BacktestEngine;
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
-use trading_strategies::{
-    strategies::MostProfitableBondStrategy, BondPersistentInfo, Isin, MarketOrder, Portfolio, Strategy,
-};
+use trading_strategies::strategies::MostProfitableBondStrategy;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

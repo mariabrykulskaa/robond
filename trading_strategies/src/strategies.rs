@@ -28,6 +28,7 @@ impl Strategy for MostProfitableBondStrategy {
         portfolio: &Portfolio,
         bonds_info: &HashMap<Isin, BondPersistentInfo>,
         bonds_prices: &HashMap<Isin, Decimal>,
+        bonds_volumes: &HashMap<Isin, i64>,
     ) -> Vec<MarketOrder> {
         let mut isin_to_yield = HashMap::<Isin, f64>::new();
         for (isin, bond_persistent_info) in bonds_info {
@@ -42,10 +43,9 @@ impl Strategy for MostProfitableBondStrategy {
         }
 
         let portfolio_market_price = portfolio.market_price(bonds_prices);
-        println!("portfolio_market_price: {}", portfolio_market_price);
         let mut orders = Vec::<MarketOrder>::new();
         for (isin, &count) in portfolio.bonds_count.iter() {
-            if bonds_prices.contains_key(isin) {
+            if count > 0 && bonds_prices.contains_key(isin) {
                 orders.push(MarketOrder {
                     isin: isin.clone(),
                     order_type: MarketOrderType::Sell,
@@ -60,16 +60,35 @@ impl Strategy for MostProfitableBondStrategy {
         match most_profitable_bond {
             None => {}
             Some((most_profitable_bond, &bond_yield)) => {
-                println!("{bond_yield}");
                 if bond_yield > 0. {
-                    let count = (portfolio_market_price / bonds_prices.get(most_profitable_bond).unwrap())
+                    let mut count = (portfolio_market_price / bonds_prices.get(most_profitable_bond).unwrap())
                         .to_i64()
                         .unwrap();
-                    orders.push(MarketOrder {
-                        isin: most_profitable_bond.clone(),
-                        order_type: MarketOrderType::Buy,
-                        count,
-                    });
+
+                    // Ограничиваем по дневному объёму торгов
+                    if let Some(&day_vol) = bonds_volumes.get(most_profitable_bond)
+                        && day_vol > 0
+                        && count > day_vol
+                    {
+                        count = day_vol;
+                    }
+
+                    // Ограничиваем по объёму выпуска
+                    if let Some(info) = bonds_info.get(most_profitable_bond)
+                        && let Some(issue_vol) = info.bond_info.issue_volume
+                        && issue_vol > 0
+                        && count > issue_vol
+                    {
+                        count = issue_vol;
+                    }
+
+                    if count > 0 {
+                        orders.push(MarketOrder {
+                            isin: most_profitable_bond.clone(),
+                            order_type: MarketOrderType::Buy,
+                            count,
+                        });
+                    }
                 }
             }
         }

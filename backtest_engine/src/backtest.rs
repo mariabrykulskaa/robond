@@ -290,6 +290,7 @@ impl BacktestEngine {
             }
 
             // 4. Строим карту цен (в рублях, целых) для передачи стратегии.
+            //    Включаем НКД в цену (грязная цена). Облигации без торгов (volume=0) исключаем.
             let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
                 .filter_map(|isin| {
@@ -297,17 +298,28 @@ impl BacktestEngine {
                     simulator
                         .price_cache
                         .get(&key)
-                        .map(|&(_, _, low, high, _, facevalue, _accint)| {
-                            let mid_price_rubles =
-                                decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
+                        .filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0)
+                        .map(|&(_, _, low, high, _, facevalue, accint)| {
+                            let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue + accint)
+                                .unwrap_or(Decimal::ZERO);
                             (isin.clone(), mid_price_rubles)
                         })
                 })
                 .collect();
 
             // 5. Вызываем стратегию и исполняем ордера.
+            let bonds_volumes: HashMap<Isin, i64> = bonds_info
+                .keys()
+                .filter_map(|isin| {
+                    let key = (current_date, isin.clone());
+                    simulator
+                        .price_cache
+                        .get(&key)
+                        .map(|&(_, _, _, _, volume, _, _)| (isin.clone(), volume as i64))
+                })
+                .collect();
             let portfolio = simulator.portfolio.clone();
-            let orders = strategy.decide_trades(current_date, &portfolio, &bonds_info, &bonds_prices);
+            let orders = strategy.decide_trades(current_date, &portfolio, &bonds_info, &bonds_prices, &bonds_volumes);
             for order in orders {
                 if let Err(e) = simulator.execute_order(order, true) {
                     eprintln!("Ошибка исполнения ордера на {}: {}", current_date, e);
