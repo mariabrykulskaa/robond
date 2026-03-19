@@ -65,7 +65,7 @@ fn test_insufficient_funds_returns_error() {
 fn test_sell_reduces_holdings_and_returns_cash() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // Все цены одинаковые → mid = close = 100% → 1000 руб/бумага
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 1000.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -91,7 +91,7 @@ fn test_sell_reduces_holdings_and_returns_cash() {
 #[test]
 fn test_sell_more_than_held_returns_error() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 1000.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -114,7 +114,7 @@ fn test_sell_more_than_held_returns_error() {
 fn test_portfolio_snapshot_values_are_correct() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // close = 100% от номинала 1000 руб → каждая бумага стоит 1000 руб
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 1000.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -215,6 +215,7 @@ impl Strategy for DoNothingStrategy {
         _portfolio: &Portfolio,
         _bonds_info: &HashMap<Isin, BondPersistentInfo>,
         _bonds_prices: &HashMap<Isin, Decimal>,
+        _bonds_volumes: &HashMap<Isin, i64>,
     ) -> Vec<MarketOrder> {
         vec![]
     }
@@ -227,7 +228,13 @@ fn test_do_nothing_strategy_returns_no_orders() {
         free_money: Decimal::from(1_000_000_i64),
         bonds_count: HashMap::new(),
     };
-    let orders = strategy.decide_trades(date(2024, 1, 1), &portfolio, &HashMap::new(), &HashMap::new());
+    let orders = strategy.decide_trades(
+        date(2024, 1, 1),
+        &portfolio,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
     assert!(orders.is_empty());
 }
 
@@ -243,6 +250,7 @@ impl Strategy for BuyOnceStrategy {
         portfolio: &Portfolio,
         _bonds_info: &HashMap<Isin, BondPersistentInfo>,
         bonds_prices: &HashMap<Isin, Decimal>,
+        _bonds_volumes: &HashMap<Isin, i64>,
     ) -> Vec<MarketOrder> {
         // Покупаем только если есть цена и бумаги нет в портфеле
         if bonds_prices.contains_key(&self.isin) && portfolio.bonds_count.get(&self.isin).copied().unwrap_or(0) == 0 {
@@ -269,7 +277,7 @@ fn test_buy_once_strategy_produces_order_when_position_absent() {
     let mut prices = HashMap::new();
     prices.insert("RU0001".to_string(), Decimal::from(950_i64));
 
-    let orders = strategy.decide_trades(date(2024, 1, 1), &portfolio, &HashMap::new(), &prices);
+    let orders = strategy.decide_trades(date(2024, 1, 1), &portfolio, &HashMap::new(), &prices, &HashMap::new());
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].isin, "RU0001");
     assert_eq!(orders[0].order_type, MarketOrderType::Buy);
@@ -289,6 +297,6 @@ fn test_buy_once_strategy_skips_when_position_held() {
     let mut prices = HashMap::new();
     prices.insert("RU0001".to_string(), Decimal::from(950_i64));
 
-    let orders = strategy.decide_trades(date(2024, 1, 1), &portfolio, &HashMap::new(), &prices);
+    let orders = strategy.decide_trades(date(2024, 1, 1), &portfolio, &HashMap::new(), &prices, &HashMap::new());
     assert!(orders.is_empty());
 }
