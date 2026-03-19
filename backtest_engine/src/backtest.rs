@@ -1,6 +1,6 @@
 //! Главный класс BacktestEngine для запуска полной симуляции
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
