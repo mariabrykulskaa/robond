@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
         println!("  Volume: {:?}", first_candle.volume);
         println!("  Num trades: {:?}", first_candle.num_trades);
     }
- 
+
     // Пример 2: Получить информацию об облигации по ISIN
     println!("\n=== Пример 2: Поиск облигации по ISIN ===");
     let isin = "RU000A10BS76";
