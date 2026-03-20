@@ -160,6 +160,29 @@ impl MarketDataClient {
         Ok(rows.into_iter().map(|r| (r.bond_id, r.earliest_offer)).collect())
     }
 
+    /// Получить даты первого дефолта по облигациям.
+    ///
+    /// Возвращает HashMap<bond_id, дата_первого_дефолта>.
+    /// type_id 12 = Оферта (дефолт), 13 = Оферта (технический дефолт)
+    pub async fn get_bond_default_dates(&self) -> Result<std::collections::HashMap<i64, NaiveDate>> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            bond_id: i64,
+            earliest_default: NaiveDate,
+        }
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT bond_id, MIN(date) AS earliest_default \
+             FROM bond_payment \
+             WHERE type_id IN (12, 13) \
+               AND bond_id IS NOT NULL \
+               AND date IS NOT NULL \
+             GROUP BY bond_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| (r.bond_id, r.earliest_default)).collect())
+    }
+
     /// Получить все выплаты (купоны, амортизации, погашения) за период бэктеста.
     ///
     /// Возвращает только записи с type_id IN (1=амортизация, 2=купон, 14=погашение)
