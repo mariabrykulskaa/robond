@@ -302,22 +302,28 @@ impl BacktestEngine {
                 }
             }
             //   b) По цене < 20% номинала — считаем облигацию дефолтной.
-            for isin in bonds_info.keys() {
-                if defaulted_isins.contains(isin) {
-                    continue;
-                }
-                let key = (current_date, isin.clone());
-                if let Some(&(_, _, low, high, _, _facevalue, _)) = simulator.price_cache.get(&key) {
-                    let mid_price_percent = (low + high) / 2.0;
-                    if mid_price_percent > 0.0 && mid_price_percent < 20.0 {
-                        defaulted_isins.insert(isin.clone());
-                        if let Some(event) = simulator.write_off_bond(isin) {
-                            eprintln!(
-                                "  Дефолт (цена {:.1}% < 20%): {} — списано {} шт.",
-                                mid_price_percent, isin, event.quantity
-                            );
+            let mut new_defaults = Vec::new();
+            if let Some(today_isins) = simulator.isins_by_date.get(&current_date) {
+                for isin in today_isins {
+                    if defaulted_isins.contains(isin) {
+                        continue;
+                    }
+                    let key = (current_date, isin.clone());
+                    if let Some(&(_, _, low, high, _, _facevalue, _)) = simulator.price_cache.get(&key) {
+                        let mid_price_percent = (low + high) / 2.0;
+                        if mid_price_percent > 0.0 && mid_price_percent < 20.0 {
+                            new_defaults.push((isin.clone(), mid_price_percent));
                         }
                     }
+                }
+            }
+            for (isin, mid_price_percent) in new_defaults {
+                defaulted_isins.insert(isin.clone());
+                if let Some(event) = simulator.write_off_bond(&isin) {
+                    eprintln!(
+                        "  Дефолт (цена {:.1}% < 20%): {} — списано {} шт.",
+                        mid_price_percent, isin, event.quantity
+                    );
                 }
             }
 
