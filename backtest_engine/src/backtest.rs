@@ -94,11 +94,7 @@ impl BacktestEngine {
                         // для process_payment, которому нужен именно %.
                         if let Some(&facevalue) = simulator.facevalues.get(isin) {
                             let amount_percent = (*amount_per_unit as f64 / facevalue) * 100.0;
-                            simulator.process_payment(
-                                isin.clone(),
-                                amount_percent,
-                                "redemption".to_string(),
-                            );
+                            simulator.process_payment(isin.clone(), amount_percent, "redemption".to_string());
                         }
                     }
                 }
