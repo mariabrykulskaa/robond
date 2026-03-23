@@ -46,7 +46,7 @@ impl DbConfig {
         })
     }
 
-    pub(crate) fn database_url(&self) -> String {
+    pub fn database_url(&self) -> String {
         format!(
             "postgresql://{}:{}@{}:{}/{}",
             self.username, self.password, self.host, self.port, self.database
