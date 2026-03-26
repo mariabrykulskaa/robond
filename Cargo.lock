@@ -2507,6 +2507,7 @@ name = "trading_strategies"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rust_decimal",
 ]
 
 [[package]]
