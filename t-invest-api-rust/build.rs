@@ -23,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Компилируем все proto файлы одновременно в один модуль
     tonic_prost_build::configure()
         .build_server(false)
+        .protoc_arg("--experimental_allow_proto3_optional")
         .compile_protos(&proto_files, &[contracts_dir.to_string()])?;
 
     Ok(())

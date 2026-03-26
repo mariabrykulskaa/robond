@@ -1,0 +1,19 @@
+[package]
+name = "backtest_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+dotenvy = "0.15"
+history_market_data = { path = "../history_market_data" }
+trading_strategies = { path = "../trading_strategies" }
+
+[dev-dependencies]
+tokio-test = "0.4"

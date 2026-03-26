@@ -2,6 +2,58 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+/// Информация о купоне облигации
+/// Соответствует таблице bond_coupon
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct BondCoupon {
+    /// ID записи купона
+    pub id: i64,
+
+    /// Текстовое описание купона
+    pub description: Option<String>,
+
+    /// Размер купона
+    pub size: Option<f32>,
+
+    /// Накопленный купонный доход
+    pub aci: Option<f32>,
+
+    /// Период купона в днях
+    pub period: Option<i16>,
+
+    /// Тип купона
+    pub type_id: Option<i64>,
+
+    /// Сумма выплаты
+    pub sum: Option<f32>,
+}
+
+/// Выплата по облигации
+/// Соответствует таблице bond_payment
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct BondPayment {
+    /// ID записи выплаты
+    pub id: i64,
+
+    /// Дата выплаты
+    pub date: Option<NaiveDate>,
+
+    /// Сумма выплаты в валюте выпуска
+    pub size: Option<f32>,
+
+    /// Относительный размер выплаты в процентах
+    pub relative_size: Option<f32>,
+
+    /// ID облигации
+    pub bond_id: Option<i64>,
+
+    /// ID валюты
+    pub currency_id: Option<i64>,
+
+    /// ID типа выплаты
+    pub type_id: Option<i64>,
+}
+
 /// Исторические данные по облигации (свечи)
 /// Соответствует таблице bond_bondhistorydata
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
