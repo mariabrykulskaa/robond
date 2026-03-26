@@ -68,4 +68,4 @@ pub mod models;
 pub use client::MarketDataClient;
 pub use config::DbConfig;
 pub use error::{Error, Result};
-pub use models::{BondHistoryData, BondInfo};
+pub use models::{BondCoupon, BondHistoryData, BondInfo, BondPayment};

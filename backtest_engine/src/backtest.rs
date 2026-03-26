@@ -37,23 +37,58 @@ impl BacktestEngine {
     ///
     /// На каждый торговый день:
     /// 1. Загружает свечи из БД и кэширует цены.
-    /// 2. Применяет все выплаты (купоны, погашения), запланированные на этот день.
+    /// 2. Применяет купоны, амортизации и погашения, запланированные на этот день.
     /// 3. Строит карту текущих цен и передаёт стратегии.
     /// 4. Исполняет ордера, которые вернула стратегия.
     /// 5. Сохраняет снимок портфеля.
     pub async fn run_backtest(&self, strategy: &dyn Strategy) -> Result<BacktestResult, anyhow::Error> {
-        // Один раз загружаем всю неизменяемую информацию об облигациях.
-        // Пока заполняем только погашение номинала в дату погашения;
-        // купонные выплаты появятся, когда будет реализована таблица bond_payment.
+        // Один раз загружаем список облигаций и строим маппинг bond_id -> ISIN.
         let all_bonds = self.market_data.get_all_bonds(None, None).await?;
+        let bond_id_to_isin: HashMap<i64, Isin> = all_bonds
+            .iter()
+            .filter_map(|b| Some((b.id, b.isin.clone()?)))
+            .collect();
+
+        // Загружаем все выплаты за период бэктеста одним запросом.
+        // type_id: 1 = амортизация, 2 = купон, 14 = погашение.
+        let all_payments = self
+            .market_data
+            .get_all_bond_payments_in_range(self.start_date, self.end_date)
+            .await?;
+
+        // Группируем выплаты по ISIN: (дата, сумма_в_рублях, тип_выплаты).
+        let mut bonds_payments: HashMap<Isin, Vec<(NaiveDate, f64, &'static str)>> = HashMap::new();
+        for payment in &all_payments {
+            let Some(date) = payment.date else { continue };
+            let Some(size) = payment.size else { continue };
+            if size <= 0.0 {
+                continue;
+            }
+            let Some(bid) = payment.bond_id else { continue };
+            let Some(isin) = bond_id_to_isin.get(&bid) else {
+                continue;
+            };
+            let type_name: &'static str = match payment.type_id {
+                Some(1) => "amortization",
+                Some(2) => "coupon",
+                Some(14) => "redemption",
+                _ => continue,
+            };
+            bonds_payments
+                .entry(isin.clone())
+                .or_default()
+                .push((date, size as f64, type_name));
+        }
+
+        // Строим bonds_info для стратегии: теперь содержит реальные выплаты из БД.
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
-            .into_iter()
+            .iter()
             .filter_map(|bond| {
-                let isin = bond.isin?;
-                let mut payments = Vec::new();
-                if let (Some(maturity_date), Some(facevalue)) = (bond.maturity_date, bond.facevalue) {
-                    payments.push((maturity_date, facevalue as Money));
-                }
+                let isin = bond.isin.clone()?;
+                let payments = bonds_payments
+                    .get(&isin)
+                    .map(|v| v.iter().map(|(date, amount, _)| (*date, *amount as Money)).collect())
+                    .unwrap_or_default();
                 Some((isin, BondPersistentInfo { payments }))
             })
             .collect();
@@ -86,15 +121,19 @@ impl BacktestEngine {
                 );
             }
 
-            // 2. Применяем выплаты, запланированные на текущий день.
-            for (isin, info) in &bonds_info {
-                for (payment_date, amount_per_unit) in &info.payments {
+            // 2. Применяем купоны, амортизации и погашения, запланированные на текущий день.
+            // size из bond_payment хранится в рублях; переводим в % от номинала,
+            // потому что process_payment ожидает именно процент.
+            for (isin, payments) in &bonds_payments {
+                for (payment_date, amount_rubles, payment_type) in payments {
                     if *payment_date == current_date {
-                        // amount_per_unit хранится в рублях; переводим в % от номинала
-                        // для process_payment, которому нужен именно %.
                         if let Some(&facevalue) = simulator.facevalues.get(isin) {
-                            let amount_percent = (*amount_per_unit as f64 / facevalue) * 100.0;
-                            simulator.process_payment(isin.clone(), amount_percent, "redemption".to_string());
+                            let amount_percent = (amount_rubles / facevalue) * 100.0;
+                            simulator.process_payment(
+                                isin.clone(),
+                                amount_percent,
+                                payment_type.to_string(),
+                            );
                         }
                     }
                 }
