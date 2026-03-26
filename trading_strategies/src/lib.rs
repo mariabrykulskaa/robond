@@ -7,8 +7,6 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
-/// Денежная сумма в некоторых единицах.
-
 /// Идентификатор бумаги (ISIN).
 pub type Isin = String;
 
