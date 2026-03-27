@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
-use trading_strategies::{BondPersistentInfo, Isin, Money, Strategy};
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use trading_strategies::{BondPersistentInfo, Isin, Strategy};
 
 use crate::models::BacktestResult;
 use crate::simulator::MarketSimulator;
@@ -12,7 +14,7 @@ use crate::simulator::MarketSimulator;
 /// Основной движок для проведения бэктеста
 pub struct BacktestEngine {
     market_data: MarketDataClient,
-    initial_capital: Money,
+    initial_capital: Decimal,
     start_date: NaiveDate,
     end_date: NaiveDate,
 }
@@ -21,7 +23,7 @@ impl BacktestEngine {
     /// Создаёт новый BacktestEngine
     pub fn new(
         market_data: MarketDataClient,
-        initial_capital: Money,
+        initial_capital: Decimal,
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Self {
@@ -85,7 +87,11 @@ impl BacktestEngine {
                 let isin = bond.isin.clone()?;
                 let payments = bonds_payments
                     .get(&isin)
-                    .map(|v| v.iter().map(|(date, amount, _)| (*date, *amount as Money)).collect())
+                    .map(|v| {
+                        v.iter()
+                            .filter_map(|(date, amount, _)| decimal_from_f64(*amount).map(|d| (*date, d)))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 Some((isin, BondPersistentInfo { payments }))
             })
@@ -134,12 +140,13 @@ impl BacktestEngine {
             }
 
             // 3. Строим карту цен (в рублях, целых) для передачи стратегии.
-            let bonds_prices: HashMap<Isin, Money> = bonds_info
+            let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
                     simulator.price_cache.get(&key).map(|&(_, _, low, high, _, facevalue)| {
-                        let mid_price_rubles = ((low + high) / 2.0 / 100.0 * facevalue) as Money;
+                        let mid_price_rubles =
+                            decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
                         (isin.clone(), mid_price_rubles)
                     })
                 })
@@ -161,8 +168,13 @@ impl BacktestEngine {
         }
 
         let final_value = simulator.get_portfolio_value();
-        let profit_loss = final_value - self.initial_capital as f64;
-        let return_percent = (profit_loss / self.initial_capital as f64) * 100.0;
+        let initial_capital_f64 = self.initial_capital.to_f64().unwrap_or(0.0);
+        let profit_loss = final_value - initial_capital_f64;
+        let return_percent = if initial_capital_f64.abs() > f64::EPSILON {
+            (profit_loss / initial_capital_f64) * 100.0
+        } else {
+            0.0
+        };
 
         Ok(BacktestResult {
             initial_capital: self.initial_capital,
@@ -176,4 +188,8 @@ impl BacktestEngine {
             end_date: self.end_date,
         })
     }
+}
+
+fn decimal_from_f64(value: f64) -> Option<Decimal> {
+    value.to_string().parse::<Decimal>().ok()
 }

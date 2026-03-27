@@ -1,8 +1,10 @@
 //! Ядро симулятора: обработка сделок, платежей и переоценки портфеля
 
 use chrono::NaiveDate;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use std::collections::HashMap;
-use trading_strategies::{MarketOrder, MarketOrderType, Money, Portfolio};
+use trading_strategies::{MarketOrder, MarketOrderType, Portfolio};
 
 use crate::models::{PaymentEvent, TradeEvent};
 
@@ -29,7 +31,7 @@ pub struct MarketSimulator {
 
 impl MarketSimulator {
     /// Создаёт новый симулятор с начальным капиталом
-    pub fn new(initial_capital: Money, start_date: NaiveDate) -> Self {
+    pub fn new(initial_capital: Decimal, start_date: NaiveDate) -> Self {
         Self {
             current_date: start_date,
             portfolio: Portfolio {
@@ -84,14 +86,15 @@ impl MarketSimulator {
 
         // Рассчитываем размер позиции в абсолютных рублях (используя расчётную стоимость)
         let amount_in_rubles = (execution_price / 100.0) * facevalue * order.count as f64;
+        let amount_decimal = decimal_from_f64(amount_in_rubles)?;
 
         match order.order_type {
             MarketOrderType::Buy => {
-                if self.portfolio.free_money < amount_in_rubles as Money {
+                if self.portfolio.free_money < amount_decimal {
                     return Err("Недостаточно средств для покупки".to_string());
                 }
 
-                self.portfolio.free_money -= amount_in_rubles as Money;
+                self.portfolio.free_money -= amount_decimal;
                 *self.holdings.entry(order.isin.clone()).or_insert(0) += order.count;
                 self.portfolio
                     .bonds_count
@@ -106,7 +109,7 @@ impl MarketSimulator {
                     ));
                 }
 
-                self.portfolio.free_money += amount_in_rubles as Money;
+                self.portfolio.free_money += amount_decimal;
                 *self.holdings.entry(order.isin.clone()).or_insert(0) -= order.count;
                 self.portfolio
                     .bonds_count
@@ -145,7 +148,7 @@ impl MarketSimulator {
         let amount_per_unit = (amount_percent / 100.0) * facevalue;
         let total_amount = amount_per_unit * quantity as f64;
 
-        self.portfolio.free_money += total_amount as Money;
+        self.portfolio.free_money += decimal_from_f64_option(total_amount)?;
 
         let event = PaymentEvent {
             date: self.current_date,
@@ -162,7 +165,7 @@ impl MarketSimulator {
 
     /// Оценивает текущий портфель по рыночным ценам
     pub fn get_portfolio_value(&self) -> f64 {
-        let mut total = self.portfolio.free_money as f64;
+        let mut total = self.portfolio.free_money.to_f64().unwrap_or(0.0);
 
         for (isin, quantity) in &self.holdings {
             if *quantity > 0 {
@@ -180,7 +183,7 @@ impl MarketSimulator {
     /// Получает текущее состояние портфеля
     pub fn get_portfolio_snapshot(&self) -> crate::models::PortfolioSnapshot {
         let total = self.get_portfolio_value();
-        let bonds_value = total - self.portfolio.free_money as f64;
+        let bonds_value = total - self.portfolio.free_money.to_f64().unwrap_or(0.0);
         crate::models::PortfolioSnapshot {
             date: self.current_date,
             cash: self.portfolio.free_money,
@@ -189,4 +192,15 @@ impl MarketSimulator {
             total_value: total,
         }
     }
+}
+
+fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
+    value
+        .to_string()
+        .parse::<Decimal>()
+        .map_err(|_| format!("Не удалось преобразовать сумму в Decimal: {value}"))
+}
+
+fn decimal_from_f64_option(value: f64) -> Option<Decimal> {
+    value.to_string().parse::<Decimal>().ok()
 }

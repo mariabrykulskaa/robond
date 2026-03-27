@@ -14,6 +14,7 @@ thiserror = "1.0"
 dotenvy = "0.15"
 history_market_data = { path = "../history_market_data" }
 trading_strategies = { path = "../trading_strategies" }
+rust_decimal = "1.40"
 
 [dev-dependencies]
 tokio-test = "0.4"
