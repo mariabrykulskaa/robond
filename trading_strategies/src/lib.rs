@@ -44,6 +44,10 @@ pub struct PaymentInfo {
 /// Общая информация об облигации (из таблицы bond_bond)
 #[derive(Debug, Clone)]
 pub struct BondCommonInfo {
+    /// ISIN код облигации
+    pub isin: String,
+    /// ID валюты (для фильтрации не-рублёвых облигаций)
+    pub currency_id: Option<i64>,
     /// Название облигации
     pub title: Option<String>,
     /// Является ли облигация субординированной
