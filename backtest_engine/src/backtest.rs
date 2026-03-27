@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
-use trading_strategies::{BondPersistentInfo, Isin, Strategy};
+use trading_strategies::{BondCommonInfo, BondPersistentInfo, Isin, PaymentInfo, PaymentType, Strategy};
 
 use crate::models::BacktestResult;
 use crate::simulator::MarketSimulator;
@@ -80,7 +80,7 @@ impl BacktestEngine {
                 .push((date, size as f64, type_name));
         }
 
-        // Строим bonds_info для стратегии: теперь содержит реальные выплаты из БД.
+        // Строим bonds_info для стратегии: теперь содержит типизированные выплаты из БД.
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
             .iter()
             .filter_map(|bond| {
@@ -89,11 +89,34 @@ impl BacktestEngine {
                     .get(&isin)
                     .map(|v| {
                         v.iter()
-                            .filter_map(|(date, amount, _)| decimal_from_f64(*amount).map(|d| (*date, d)))
+                            .filter_map(|(date, amount, type_name)| {
+                                decimal_from_f64(*amount).map(|d| PaymentInfo {
+                                    date: *date,
+                                    amount: d,
+                                    payment_type: match *type_name {
+                                        "coupon" => PaymentType::Coupon,
+                                        "amortization" => PaymentType::Amortization,
+                                        "redemption" => PaymentType::Redemption,
+                                        _ => PaymentType::Coupon,
+                                    },
+                                })
+                            })
                             .collect()
                     })
                     .unwrap_or_default();
-                Some((isin, BondPersistentInfo { payments }))
+                let bond_info = BondCommonInfo {
+                    title: bond.title.clone(),
+                    is_subordinated: bond.is_subordinated,
+                    issue_volume: bond.issue_volume,
+                    placement_date: bond.placement_date,
+                    maturity_date: bond.maturity_date,
+                    facevalue: bond.facevalue.map(|v| v as f64),
+                    start_facevalue: bond.start_facevalue.map(|v| v as f64),
+                    board: bond.board.clone(),
+                    is_for_qualified_investors: bond.is_for_qualified_investors,
+                    is_traded: bond.is_traded,
+                };
+                Some((isin, BondPersistentInfo { bond_info, payments }))
             })
             .collect();
 
@@ -145,8 +168,8 @@ impl BacktestEngine {
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
                     simulator.price_cache.get(&key).map(|&(_, _, low, high, _, facevalue)| {
-                        let mid_price_rubles =
-                            decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
+                        let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue)
+                            .unwrap_or_else(|| Decimal::ZERO);
                         (isin.clone(), mid_price_rubles)
                     })
                 })
