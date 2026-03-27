@@ -19,11 +19,64 @@ pub struct Portfolio {
     pub bonds_count: HashMap<Isin, i64>,
 }
 
+/// Тип выплаты по облигации
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaymentType {
+    /// Купонная выплата
+    Coupon,
+    /// Амортизация (частичное погашение номинала)
+    Amortization,
+    /// Полное погашение номинала
+    Redemption,
+}
+
+/// Информация об одной выплате по облигации
+#[derive(Debug, Clone)]
+pub struct PaymentInfo {
+    /// Дата выплаты
+    pub date: NaiveDate,
+    /// Сумма выплаты
+    pub amount: Decimal,
+    /// Тип выплаты
+    pub payment_type: PaymentType,
+}
+
+/// Общая информация об облигации (из таблицы bond_bond)
+#[derive(Debug, Clone)]
+pub struct BondCommonInfo {
+    /// ISIN код облигации
+    pub isin: String,
+    /// ID валюты (для фильтрации не-рублёвых облигаций)
+    pub currency_id: Option<i64>,
+    /// Название облигации
+    pub title: Option<String>,
+    /// Является ли облигация субординированной
+    pub is_subordinated: Option<bool>,
+    /// Объём выпуска
+    pub issue_volume: Option<i64>,
+    /// Дата размещения
+    pub placement_date: Option<NaiveDate>,
+    /// Дата погашения
+    pub maturity_date: Option<NaiveDate>,
+    /// Номинальная стоимость
+    pub facevalue: Option<f64>,
+    /// Начальная номинальная стоимость
+    pub start_facevalue: Option<f64>,
+    /// Режим торгов (board)
+    pub board: Option<String>,
+    /// Для квалифицированных инвесторов
+    pub is_for_qualified_investors: Option<bool>,
+    /// Торгуется ли в данный момент
+    pub is_traded: bool,
+}
+
 /// Не меняющаяся информация об облигации
 #[derive(Debug, Clone)]
 pub struct BondPersistentInfo {
-    /// Выплаты по купонам и номиналу: дата и сумма.
-    pub payments: Vec<(NaiveDate, Decimal)>,
+    /// Общая информация об облигации
+    pub bond_info: BondCommonInfo,
+    /// Все выплаты: купоны, амортизации и погашения.
+    pub payments: Vec<PaymentInfo>,
 }
 
 /// Тип рыночного торгового поручения
