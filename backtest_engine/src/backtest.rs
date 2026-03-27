@@ -168,8 +168,8 @@ impl BacktestEngine {
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
                     simulator.price_cache.get(&key).map(|&(_, _, low, high, _, facevalue)| {
-                        let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue)
-                            .unwrap_or_else(|| Decimal::ZERO);
+                        let mid_price_rubles =
+                            decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue).unwrap_or(Decimal::ZERO);
                         (isin.clone(), mid_price_rubles)
                     })
                 })
