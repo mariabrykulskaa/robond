@@ -1,6 +1,9 @@
 //! Модуль с торговыми стратегиями
 //!
 //! TODO: добавить хотя бы одну торговую стратегию
+//!
+
+pub mod strategies;
 
 use std::collections::HashMap;
 
@@ -17,6 +20,19 @@ pub struct Portfolio {
     pub free_money: Decimal,
     /// Количество облигаций в портфеле
     pub bonds_count: HashMap<Isin, i64>,
+}
+
+impl Portfolio {
+    fn market_price(&self, bonds_prices: &HashMap<Isin, Decimal>) -> Decimal {
+        let mut price = self.free_money;
+        for (isin, &count) in self.bonds_count.iter() {
+            match bonds_prices.get(isin) {
+                None => {}
+                Some(bond_price) => price += Decimal::from(count) * bond_price,
+            }
+        }
+        price
+    }
 }
 
 /// Тип выплаты по облигации
