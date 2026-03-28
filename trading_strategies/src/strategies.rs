@@ -16,16 +16,7 @@ fn calc_yield(current_bond_price: Decimal, current_date: NaiveDate, bond_persist
         }
     }
 
-    match xirr(&cash_flow, &dates, None) {
-        Err(err) => {
-            //dbg!(err);
-            //dbg!(cash_flow);
-            //dbg!(dates);
-            //panic!("error");
-            -1.
-        }
-        Ok(bond_yield) => bond_yield,
-    }
+    xirr(&cash_flow, &dates, None).unwrap_or(-1.)
 }
 
 pub struct MostProfitableBondStrategy;
