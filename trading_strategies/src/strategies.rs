@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use financial::naive_date::xirr;
 use rust_decimal::prelude::*;
 
-use crate::{BondPersistentInfo, Isin, MarketOrder, MarketOrderType, PaymentInfo, Portfolio, Strategy};
+use crate::{BondPersistentInfo, Isin, MarketOrder, MarketOrderType, Portfolio, Strategy};
 
 fn calc_yield(current_bond_price: Decimal, current_date: NaiveDate, bond_persistent_info: &BondPersistentInfo) -> f64 {
     let mut cash_flow = vec![-current_bond_price.as_f64()];
@@ -14,9 +14,7 @@ fn calc_yield(current_bond_price: Decimal, current_date: NaiveDate, bond_persist
         dates.push(payment_info.date);
     }
 
-    let bond_yield = xirr(&cash_flow, &dates, None).unwrap(); // TODO: заменить unwrup() на более акуратную обработку ошибок
-
-    bond_yield
+    xirr(&cash_flow, &dates, None).unwrap() // TODO: заменить unwrup() на более акуратную обработку ошибок
 }
 
 pub struct MostProfitableBondStrategy;
@@ -35,18 +33,31 @@ impl Strategy for MostProfitableBondStrategy {
             isin_to_yield.insert(isin.clone(), bond_yield);
         }
 
-        let portfolio_market_price = portfolio.market_price(&bonds_prices);
+        let portfolio_market_price = portfolio.market_price(bonds_prices);
         let mut orders = Vec::<MarketOrder>::new();
         for (isin, &count) in portfolio.bonds_count.iter() {
-            orders.push(MarketOrder { isin: isin.clone(), order_type: MarketOrderType::Sell, count });
+            orders.push(MarketOrder {
+                isin: isin.clone(),
+                order_type: MarketOrderType::Sell,
+                count,
+            });
         }
-        
-        let most_profitable_bond = isin_to_yield.iter().max_by(|&(key1, val1), &(key2, val2)| val1.partial_cmp(val2).unwrap()).map(|(isin, bond_yield)| isin);
+
+        let most_profitable_bond = isin_to_yield
+            .iter()
+            .max_by(|&(_key1, val1), &(_key2, val2)| val1.partial_cmp(val2).unwrap())
+            .map(|(isin, _bond_yield)| isin);
         match most_profitable_bond {
-            None => {},
+            None => {}
             Some(most_profitable_bond) => {
-                let count = (portfolio_market_price / bonds_prices.get(most_profitable_bond).unwrap()).to_i64().unwrap();
-                orders.push(MarketOrder { isin: most_profitable_bond.clone(), order_type: MarketOrderType::Buy, count });
+                let count = (portfolio_market_price / bonds_prices.get(most_profitable_bond).unwrap())
+                    .to_i64()
+                    .unwrap();
+                orders.push(MarketOrder {
+                    isin: most_profitable_bond.clone(),
+                    order_type: MarketOrderType::Buy,
+                    count,
+                });
             }
         }
 
