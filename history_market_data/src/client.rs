@@ -116,6 +116,28 @@ impl MarketDataClient {
         Ok(candles)
     }
 
+    /// Получить все свечи для всех облигаций за диапазон дат одним запросом.
+    ///
+    /// Исключает поле full_information (JSON) для экономии памяти и трафика.
+    pub async fn get_all_candles_in_range(
+        &self,
+        start_date: NaiveDate,
+        end_date: NaiveDate,
+    ) -> Result<Vec<BondHistoryData>> {
+        let candles = sqlx::query_as::<_, BondHistoryData>(
+            "SELECT id, date, num_trades, value, low, high, close, open, \
+             volume, facevalue, accint, NULL::jsonb AS full_information, bond_id \
+             FROM bond_bondhistorydata \
+             WHERE date >= $1 AND date <= $2 \
+             ORDER BY date ASC",
+        )
+        .bind(start_date)
+        .bind(end_date)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(candles)
+    }
+
     /// Получить все выплаты (купоны, амортизации, погашения) за период бэктеста.
     ///
     /// Возвращает только записи с type_id IN (1=амортизация, 2=купон, 14=погашение)
