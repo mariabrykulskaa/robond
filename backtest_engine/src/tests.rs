@@ -16,7 +16,7 @@ fn date(y: i32, m: u32, d: u32) -> NaiveDate {
 fn test_buy_executes_correctly() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // open=95, close=96, low=94, high=97, volume=1000, facevalue=1000 руб
-    sim.cache_prices("RU000A104H08".to_string(), 95.0, 96.0, 94.0, 97.0, 1000.0, 1000.0);
+    sim.cache_prices("RU000A104H08".to_string(), 95.0, 96.0, 94.0, 97.0, 1000.0, 1000.0, 0.0);
 
     let order = MarketOrder {
         isin: "RU000A104H08".to_string(),
@@ -40,7 +40,16 @@ fn test_buy_executes_correctly() {
 #[test]
 fn test_insufficient_funds_returns_error() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_i64), date(2024, 1, 1));
-    sim.cache_prices("RU000A104H08".to_string(), 98.0, 99.0, 97.0, 100.0, 50000.0, 1000.0);
+    sim.cache_prices(
+        "RU000A104H08".to_string(),
+        98.0,
+        99.0,
+        97.0,
+        100.0,
+        50000.0,
+        1000.0,
+        0.0,
+    );
 
     let order = MarketOrder {
         isin: "RU000A104H08".to_string(),
@@ -56,7 +65,7 @@ fn test_insufficient_funds_returns_error() {
 fn test_sell_reduces_holdings_and_returns_cash() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // Все цены одинаковые → mid = close = 100% → 1000 руб/бумага
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -82,7 +91,7 @@ fn test_sell_reduces_holdings_and_returns_cash() {
 #[test]
 fn test_sell_more_than_held_returns_error() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -105,7 +114,7 @@ fn test_sell_more_than_held_returns_error() {
 fn test_portfolio_snapshot_values_are_correct() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // close = 100% от номинала 1000 руб → каждая бумага стоит 1000 руб
-    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0);
+    sim.cache_prices("RU0001".to_string(), 100.0, 100.0, 100.0, 100.0, 0.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -137,7 +146,7 @@ fn test_portfolio_snapshot_values_are_correct() {
 fn test_coupon_payment_credited_to_cash() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
     // mid price = (94+97)/2 = 95.5% → 955 руб/бумага
-    sim.cache_prices("RU0001".to_string(), 95.0, 96.0, 94.0, 97.0, 100.0, 1000.0);
+    sim.cache_prices("RU0001".to_string(), 95.0, 96.0, 94.0, 97.0, 100.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
@@ -172,7 +181,7 @@ fn test_coupon_payment_credited_to_cash() {
 #[test]
 fn test_trades_recorded_in_history() {
     let mut sim = MarketSimulator::new(Decimal::from(1_000_000_i64), date(2024, 1, 1));
-    sim.cache_prices("RU0001".to_string(), 95.0, 96.0, 94.0, 97.0, 100.0, 1000.0);
+    sim.cache_prices("RU0001".to_string(), 95.0, 96.0, 94.0, 97.0, 100.0, 1000.0, 0.0);
 
     let buy = MarketOrder {
         isin: "RU0001".to_string(),
