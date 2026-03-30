@@ -183,6 +183,47 @@ impl MarketDataClient {
         Ok(coupon)
     }
 
+    /// Загрузить купоны для всех облигаций, у которых есть coupon_id.
+    /// Возвращает HashMap: bond_id -> BondCoupon.
+    pub async fn get_all_bond_coupons(&self) -> Result<std::collections::HashMap<i64, BondCoupon>> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            bond_id: i64,
+            coupon_id: i64,
+            description: Option<String>,
+            size: Option<f32>,
+            aci: Option<f32>,
+            period: Option<i16>,
+            type_id: Option<i64>,
+            sum: Option<f32>,
+        }
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT bb.id AS bond_id, bc.id AS coupon_id, \
+                    bc.description, bc.size, bc.aci, bc.period, bc.type_id, bc.sum \
+             FROM bond_bond bb \
+             JOIN bond_coupon bc ON bc.id = bb.coupon_id \
+             WHERE bb.coupon_id IS NOT NULL",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut map = std::collections::HashMap::new();
+        for r in rows {
+            map.insert(
+                r.bond_id,
+                BondCoupon {
+                    id: r.coupon_id,
+                    description: r.description,
+                    size: r.size,
+                    aci: r.aci,
+                    period: r.period,
+                    type_id: r.type_id,
+                    sum: r.sum,
+                },
+            );
+        }
+        Ok(map)
+    }
+
     /// Получить выплаты по облигации за диапазон дат.
     pub async fn get_bond_payments(
         &self,

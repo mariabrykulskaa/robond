@@ -68,6 +68,12 @@ pub struct BondCommonInfo {
     pub is_for_qualified_investors: Option<bool>,
     /// Торгуется ли в данный момент
     pub is_traded: bool,
+    /// Размер текущего купона (руб.)
+    pub coupon_size: Option<f64>,
+    /// Периодичность купона (дней)
+    pub coupon_period: Option<i16>,
+    /// Текущий НКД по купону (руб.)
+    pub coupon_aci: Option<f64>,
 }
 
 /// Не меняющаяся информация об облигации
