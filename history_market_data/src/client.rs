@@ -138,16 +138,26 @@ impl MarketDataClient {
         Ok(candles)
     }
 
-    /// Получить ID облигаций, у которых есть хотя бы одна оферта.
+    /// Получить самую раннюю дату оферты для каждой облигации.
+    /// Возвращает `HashMap<bond_id, earliest_offer_date>`.
     /// Типы оферт: 3–13, 15–18 (всё кроме 1=амортизация, 2=купон, 14=погашение).
-    pub async fn get_bond_ids_with_offers(&self) -> Result<Vec<i64>> {
-        let rows = sqlx::query_scalar::<_, i64>(
-            "SELECT DISTINCT bond_id FROM bond_payment \
-             WHERE type_id NOT IN (1, 2, 14) AND bond_id IS NOT NULL",
+    pub async fn get_bond_offer_dates(&self) -> Result<std::collections::HashMap<i64, NaiveDate>> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            bond_id: i64,
+            earliest_offer: NaiveDate,
+        }
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT bond_id, MIN(date) AS earliest_offer \
+             FROM bond_payment \
+             WHERE type_id NOT IN (1, 2, 14) \
+               AND bond_id IS NOT NULL \
+               AND date IS NOT NULL \
+             GROUP BY bond_id",
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows)
+        Ok(rows.into_iter().map(|r| (r.bond_id, r.earliest_offer)).collect())
     }
 
     /// Получить все выплаты (купоны, амортизации, погашения) за период бэктеста.

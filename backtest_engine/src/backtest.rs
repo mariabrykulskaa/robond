@@ -1,6 +1,6 @@
 //! Главный класс BacktestEngine для запуска полной симуляции
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
@@ -58,13 +58,13 @@ impl BacktestEngine {
             t0.elapsed().as_secs_f64()
         );
 
-        // Загружаем ID облигаций с офертой — исключим их из бэктеста.
-        eprintln!("  Загрузка облигаций с офертой...");
+        // Загружаем даты оферт — облигации с офертой обрабатываем до даты оферты.
+        eprintln!("  Загрузка дат оферт...");
         let t_offers = Instant::now();
-        let offer_bond_ids: HashSet<i64> = self.market_data.get_bond_ids_with_offers().await?.into_iter().collect();
+        let bond_offer_dates = self.market_data.get_bond_offer_dates().await?;
         eprintln!(
             "  ✓ {} облигаций с офертой ({:.1}с)",
-            offer_bond_ids.len(),
+            bond_offer_dates.len(),
             t_offers.elapsed().as_secs_f64()
         );
 
@@ -151,7 +151,6 @@ impl BacktestEngine {
             .iter()
             .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
             .filter(|bond| bond.board.as_deref() != Some(STRUCTURAL_BOARD))
-            .filter(|bond| !offer_bond_ids.contains(&bond.id))
             .filter_map(|bond| {
                 let isin = bond.isin.clone()?;
                 let payments = bonds_payments
@@ -186,6 +185,7 @@ impl BacktestEngine {
                     board: bond.board.clone(),
                     is_for_qualified_investors: bond.is_for_qualified_investors,
                     is_traded: bond.is_traded,
+                    offer_date: bond_offer_dates.get(&bond.id).copied(),
                     coupon_size: bond_coupons.get(&bond.id).and_then(|c| c.size.map(|v| v as f64)),
                     coupon_period: bond_coupons.get(&bond.id).and_then(|c| c.period),
                     coupon_aci: bond_coupons.get(&bond.id).and_then(|c| c.aci.map(|v| v as f64)),
@@ -213,12 +213,29 @@ impl BacktestEngine {
             bonds_info.len(),
             t2.elapsed().as_secs_f64()
         );
+
+        // Индекс дат офертных погашений: дата -> список ISIN.
+        let mut offer_isins_by_date: HashMap<NaiveDate, Vec<Isin>> = HashMap::new();
+        for (isin, info) in &bonds_info {
+            if let Some(offer_date) = info.bond_info.offer_date {
+                offer_isins_by_date.entry(offer_date).or_default().push(isin.clone());
+            }
+        }
+
         eprintln!(
             "  Инициализация завершена за {:.1}с. Запуск цикла по датам...\n",
             t0.elapsed().as_secs_f64()
         );
 
         let mut simulator = MarketSimulator::new(self.initial_capital, self.start_date);
+
+        // Заполняем объёмы выпуска для ограничения покупок.
+        for (isin, info) in &bonds_info {
+            if let Some(vol) = info.bond_info.issue_volume {
+                simulator.issue_volumes.insert(isin.clone(), vol);
+            }
+        }
+
         let mut snapshots = Vec::new();
 
         let total_days = (self.end_date - self.start_date).num_days() + 1;
@@ -248,7 +265,19 @@ impl BacktestEngine {
                 }
             }
 
-            // 2. Применяем купоны, амортизации и погашения, запланированные на текущий день.
+            // 2. Принудительное погашение облигаций по оферте (выкуп по номиналу).
+            if let Some(offer_isins) = offer_isins_by_date.get(&current_date) {
+                for isin in offer_isins {
+                    if let Some(event) = simulator.force_redeem_bond(isin) {
+                        eprintln!(
+                            "  Оферта: {} — погашено {} шт. на {:.2} руб.",
+                            isin, event.quantity, event.total_amount
+                        );
+                    }
+                }
+            }
+
+            // 3. Применяем купоны, амортизации и погашения, запланированные на текущий день.
             // size из bond_payment хранится в рублях; переводим в % от номинала,
             // потому что process_payment ожидает именно процент.
             if let Some(today_payments) = payments_by_date.get(&current_date) {
@@ -260,7 +289,7 @@ impl BacktestEngine {
                 }
             }
 
-            // 3. Строим карту цен (в рублях, целых) для передачи стратегии.
+            // 4. Строим карту цен (в рублях, целых) для передачи стратегии.
             let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
                 .filter_map(|isin| {
@@ -276,7 +305,7 @@ impl BacktestEngine {
                 })
                 .collect();
 
-            // 4. Вызываем стратегию и исполняем ордера.
+            // 5. Вызываем стратегию и исполняем ордера.
             let portfolio = simulator.portfolio.clone();
             let orders = strategy.decide_trades(current_date, &portfolio, &bonds_info, &bonds_prices);
             for order in orders {
@@ -285,7 +314,7 @@ impl BacktestEngine {
                 }
             }
 
-            // 5. Снимок портфеля на конец дня.
+            // 6. Снимок портфеля на конец дня.
             snapshots.push(simulator.get_portfolio_snapshot());
 
             current_date += chrono::Duration::days(1);

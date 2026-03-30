@@ -84,6 +84,8 @@ pub struct BondCommonInfo {
     pub is_for_qualified_investors: Option<bool>,
     /// Торгуется ли в данный момент
     pub is_traded: bool,
+    /// Дата оферты (если есть) — считаем виртуальной датой погашения
+    pub offer_date: Option<NaiveDate>,
     /// Размер текущего купона (руб.)
     pub coupon_size: Option<f64>,
     /// Периодичность купона (дней)
