@@ -222,6 +222,27 @@ impl MarketSimulator {
         Some(event)
     }
 
+    /// Списание облигации в 0 при дефолте. Позиция обнуляется без зачисления денег.
+    pub fn write_off_bond(&mut self, isin: &str) -> Option<PaymentEvent> {
+        let quantity = *self.holdings.get(isin)?;
+        if quantity == 0 {
+            return None;
+        }
+        self.holdings.insert(isin.to_string(), 0);
+        self.portfolio.bonds_count.insert(isin.to_string(), 0);
+
+        let event = PaymentEvent {
+            date: self.current_date,
+            isin: isin.to_string(),
+            quantity,
+            amount_per_unit: 0.0,
+            total_amount: 0.0,
+            payment_type: "default_write_off".to_string(),
+        };
+        self.payments.push(event.clone());
+        Some(event)
+    }
+
     /// Оценивает текущий портфель по рыночным ценам.
     /// Если в текущий день нет свечи — использует последнюю известную цену закрытия.
     pub fn get_portfolio_value(&self) -> f64 {
