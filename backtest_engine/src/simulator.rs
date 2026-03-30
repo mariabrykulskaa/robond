@@ -87,6 +87,11 @@ impl MarketSimulator {
             .copied()
             .ok_or_else(|| format!("Нет данных о цене для {} на {}", order.isin, self.current_date))?;
 
+        // Если в этот день не было торгов — операции запрещены.
+        if volume == 0.0 {
+            return Err(format!("Нет торгов для {} на {}", order.isin, self.current_date));
+        }
+
         // Ограничиваем покупку дневным объёмом торгов и объёмом выпуска.
         if order.order_type == MarketOrderType::Buy {
             let day_volume = volume as i64;

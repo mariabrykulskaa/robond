@@ -130,5 +130,6 @@ pub trait Strategy {
         portfolio: &Portfolio,
         bonds_info: &HashMap<Isin, BondPersistentInfo>,
         bonds_prices: &HashMap<Isin, Decimal>,
+        bonds_volumes: &HashMap<Isin, i64>,
     ) -> Vec<MarketOrder>;
 }
