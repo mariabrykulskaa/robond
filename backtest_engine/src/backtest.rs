@@ -77,7 +77,15 @@ impl BacktestEngine {
             bond_coupons.len(),
             t_coupons.elapsed().as_secs_f64()
         );
-
+        // Загружаем даты дефолтов (type_id 12,13 — дефолт/тех.дефолт по оферте).
+        eprintln!("  Загрузка дат дефолтов...");
+        let t_defaults = Instant::now();
+        let bond_default_dates = self.market_data.get_bond_default_dates().await?;
+        eprintln!(
+            "  ✓ {} облигаций с дефолтом ({:.1}с)",
+            bond_default_dates.len(),
+            t_defaults.elapsed().as_secs_f64()
+        );
         // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
         eprintln!(
             "  Загрузка всех свечей за период {}..{} ...",
@@ -186,6 +194,7 @@ impl BacktestEngine {
                     is_for_qualified_investors: bond.is_for_qualified_investors,
                     is_traded: bond.is_traded,
                     offer_date: bond_offer_dates.get(&bond.id).copied(),
+                    default_date: bond_default_dates.get(&bond.id).copied(),
                     coupon_size: bond_coupons.get(&bond.id).and_then(|c| c.size.map(|v| v as f64)),
                     coupon_period: bond_coupons.get(&bond.id).and_then(|c| c.period),
                     coupon_aci: bond_coupons.get(&bond.id).and_then(|c| c.aci.map(|v| v as f64)),
@@ -221,6 +230,21 @@ impl BacktestEngine {
                 offer_isins_by_date.entry(offer_date).or_default().push(isin.clone());
             }
         }
+
+        // Индекс дат дефолтов: дата -> список ISIN.
+        let mut default_isins_by_date: HashMap<NaiveDate, Vec<Isin>> = HashMap::new();
+        for (isin, info) in &bonds_info {
+            if let Some(default_date) = info.bond_info.default_date {
+                default_isins_by_date
+                    .entry(default_date)
+                    .or_default()
+                    .push(isin.clone());
+            }
+        }
+
+        // Множество дефолтных ISIN — накапливается по мере прохождения дат.
+        // Облигации из этого множества исключаются из торгов и выплат.
+        let mut defaulted_isins: std::collections::HashSet<Isin> = std::collections::HashSet::new();
 
         eprintln!(
             "  Инициализация завершена за {:.1}с. Запуск цикла по датам...\n",
@@ -265,6 +289,38 @@ impl BacktestEngine {
                 }
             }
 
+            // 1.5. Обработка дефолтов.
+            //   a) По дате из БД (тип платежа 12/13).
+            if let Some(def_isins) = default_isins_by_date.get(&current_date) {
+                for isin in def_isins {
+                    if !defaulted_isins.contains(isin) {
+                        defaulted_isins.insert(isin.clone());
+                        if let Some(event) = simulator.write_off_bond(isin) {
+                            eprintln!("  Дефолт (БД): {} — списано {} шт.", isin, event.quantity);
+                        }
+                    }
+                }
+            }
+            //   b) По цене < 20% номинала — считаем облигацию дефолтной.
+            for isin in bonds_info.keys() {
+                if defaulted_isins.contains(isin) {
+                    continue;
+                }
+                let key = (current_date, isin.clone());
+                if let Some(&(_, _, low, high, _, _facevalue, _)) = simulator.price_cache.get(&key) {
+                    let mid_price_percent = (low + high) / 2.0;
+                    if mid_price_percent > 0.0 && mid_price_percent < 20.0 {
+                        defaulted_isins.insert(isin.clone());
+                        if let Some(event) = simulator.write_off_bond(isin) {
+                            eprintln!(
+                                "  Дефолт (цена {:.1}% < 20%): {} — списано {} шт.",
+                                mid_price_percent, isin, event.quantity
+                            );
+                        }
+                    }
+                }
+            }
+
             // 2. Принудительное погашение облигаций по оферте (выкуп по номиналу).
             if let Some(offer_isins) = offer_isins_by_date.get(&current_date) {
                 for isin in offer_isins {
@@ -282,6 +338,9 @@ impl BacktestEngine {
             // потому что process_payment ожидает именно процент.
             if let Some(today_payments) = payments_by_date.get(&current_date) {
                 for (isin, amount_rubles, payment_type) in today_payments {
+                    if defaulted_isins.contains(isin) {
+                        continue;
+                    }
                     if let Some(&facevalue) = simulator.facevalues.get(isin) {
                         let amount_percent = (amount_rubles / facevalue) * 100.0;
                         simulator.process_payment(isin.clone(), amount_percent, payment_type.to_string());
@@ -293,6 +352,7 @@ impl BacktestEngine {
             //    Включаем НКД в цену (грязная цена). Облигации без торгов (volume=0) исключаем.
             let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
+                .filter(|isin| !defaulted_isins.contains(*isin))
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
                     simulator
@@ -310,6 +370,7 @@ impl BacktestEngine {
             // 5. Вызываем стратегию и исполняем ордера.
             let bonds_volumes: HashMap<Isin, i64> = bonds_info
                 .keys()
+                .filter(|isin| !defaulted_isins.contains(*isin))
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
                     simulator
