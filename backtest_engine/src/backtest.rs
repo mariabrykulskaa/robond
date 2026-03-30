@@ -1,6 +1,6 @@
 //! Главный класс BacktestEngine для запуска полной симуляции
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use history_market_data::MarketDataClient;
@@ -56,6 +56,26 @@ impl BacktestEngine {
             "  ✓ Загружено {} облигаций ({:.1}с)",
             all_bonds.len(),
             t0.elapsed().as_secs_f64()
+        );
+
+        // Загружаем ID облигаций с офертой — исключим их из бэктеста.
+        eprintln!("  Загрузка облигаций с офертой...");
+        let t_offers = Instant::now();
+        let offer_bond_ids: HashSet<i64> = self.market_data.get_bond_ids_with_offers().await?.into_iter().collect();
+        eprintln!(
+            "  ✓ {} облигаций с офертой ({:.1}с)",
+            offer_bond_ids.len(),
+            t_offers.elapsed().as_secs_f64()
+        );
+
+        // Загружаем купонную информацию для всех облигаций одним запросом.
+        eprintln!("  Загрузка купонной информации...");
+        let t_coupons = Instant::now();
+        let bond_coupons = self.market_data.get_all_bond_coupons().await?;
+        eprintln!(
+            "  ✓ Купоны для {} облигаций ({:.1}с)",
+            bond_coupons.len(),
+            t_coupons.elapsed().as_secs_f64()
         );
 
         // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
@@ -121,12 +141,17 @@ impl BacktestEngine {
         // ID рублёвой валюты (SUR) в таблице bond_currency.
         const RUB_CURRENCY_ID: i64 = 3;
 
-        // Строим bonds_info для стратегии: только рублёвые облигации.
+        // Доска структурных (инвестиционных) облигаций на MOEX — исключаем из бэктеста.
+        const STRUCTURAL_BOARD: &str = "TQIR";
+
+        // Строим bonds_info для стратегии: только рублёвые, не структурные.
         eprintln!("  Построение карты облигаций и индексов...");
         let t2 = Instant::now();
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
             .iter()
             .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
+            .filter(|bond| bond.board.as_deref() != Some(STRUCTURAL_BOARD))
+            .filter(|bond| !offer_bond_ids.contains(&bond.id))
             .filter_map(|bond| {
                 let isin = bond.isin.clone()?;
                 let payments = bonds_payments
@@ -161,6 +186,9 @@ impl BacktestEngine {
                     board: bond.board.clone(),
                     is_for_qualified_investors: bond.is_for_qualified_investors,
                     is_traded: bond.is_traded,
+                    coupon_size: bond_coupons.get(&bond.id).and_then(|c| c.size.map(|v| v as f64)),
+                    coupon_period: bond_coupons.get(&bond.id).and_then(|c| c.period),
+                    coupon_aci: bond_coupons.get(&bond.id).and_then(|c| c.aci.map(|v| v as f64)),
                 };
                 Some((isin, BondPersistentInfo { bond_info, payments }))
             })
