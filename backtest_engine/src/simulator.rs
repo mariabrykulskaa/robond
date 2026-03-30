@@ -32,7 +32,7 @@ pub struct MarketSimulator {
     /// Индекс: дата -> список ISIN, у которых есть свечи в этот день
     pub isins_by_date: HashMap<NaiveDate, Vec<String>>,
     /// Последняя известная цена для каждой облигации (для оценки портфеля в нерабочие дни)
-    last_known_price: HashMap<String, PriceEntry>,
+    pub last_known_price: HashMap<String, PriceEntry>,
 }
 
 impl MarketSimulator {
