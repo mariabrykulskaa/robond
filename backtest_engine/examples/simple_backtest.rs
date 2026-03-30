@@ -21,6 +21,7 @@ impl Strategy for DoNothingStrategy {
         _portfolio: &Portfolio,
         _bonds_info: &HashMap<Isin, BondPersistentInfo>,
         _bonds_prices: &HashMap<Isin, Decimal>,
+        _bonds_volumes: &HashMap<Isin, i64>,
     ) -> Vec<MarketOrder> {
         vec![]
     }
