@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 t-invest-api-rust = { workspace = true }
 rust_decimal = { workspace = true }
-dotenvy = { workspace = true }
 tokio = { workspace = true }
 trading_strategies = { workspace = true }
 history_market_data = { workspace = true }
+chrono = { workspace = true }
+backtest_engine = { workspace = true }

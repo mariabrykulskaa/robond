@@ -23,6 +23,7 @@ tonic-prost-build = "0.14.2"
 t-invest-api-rust = { path = "t-invest-api-rust", features = ["decimal"] }
 trading_strategies = { path = "trading_strategies" }
 history_market_data = { path = "history_market_data" }
+backtest_engine = { path = "backtest_engine" }
 
 rust_decimal = { version = "1.41.0", features = ["macros"] }
 financial = "1.1.5"
