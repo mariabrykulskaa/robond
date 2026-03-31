@@ -103,10 +103,12 @@ impl BacktestEngine {
         );
 
         // Индексируем свечи по дате для O(1) доступа в дневном цикле.
-        let mut candles_by_date: HashMap<NaiveDate, Vec<&history_market_data::BondHistoryData>> = HashMap::new();
-        for candle in &all_candles {
+        // Используем owned-данные, чтобы можно было drop(all_candles) и освободить дублирующую память.
+        let mut candles_by_date: HashMap<NaiveDate, Vec<history_market_data::BondHistoryData>> = HashMap::new();
+        for candle in all_candles {
             candles_by_date.entry(candle.date).or_default().push(candle);
         }
+        // all_candles moved — память освобождена.
 
         // Загружаем все выплаты за период бэктеста одним запросом.
         // type_id: 1 = амортизация, 2 = купон, 14 = погашение.
@@ -152,13 +154,18 @@ impl BacktestEngine {
         // Доска структурных (инвестиционных) облигаций на MOEX — исключаем из бэктеста.
         const STRUCTURAL_BOARD: &str = "TQIR";
 
-        // Строим bonds_info для стратегии: только рублёвые, не структурные.
+        // Строим bonds_info для стратегии: только рублёвые, не структурные, не флоатеры.
         eprintln!("  Построение карты облигаций и индексов...");
         let t2 = Instant::now();
         let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
             .iter()
             .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
             .filter(|bond| bond.board.as_deref() != Some(STRUCTURAL_BOARD))
+            .filter(|bond| {
+                // Исключаем флоатеры: если купоны отличаются друг от друга.
+                let dominated = bond.isin.as_ref().and_then(|isin| bonds_payments.get(isin));
+                !dominated.map(|p| is_floater(p)).unwrap_or(false)
+            })
             .filter_map(|bond| {
                 let isin = bond.isin.clone()?;
                 let payments = bonds_payments
@@ -271,8 +278,8 @@ impl BacktestEngine {
             simulator.set_date(current_date);
 
             // 1. Кэшируем цены из предзагруженных свечей.
-            if let Some(candles) = candles_by_date.get(&current_date) {
-                for candle in candles {
+            if let Some(candles) = candles_by_date.remove(&current_date) {
+                for candle in &candles {
                     let Some(isin) = bond_id_to_isin.get(&candle.bond_id) else {
                         continue;
                     };
@@ -355,34 +362,43 @@ impl BacktestEngine {
             }
 
             // 4. Строим карту цен (в рублях, целых) для передачи стратегии.
-            //    Включаем НКД в цену (грязная цена). Облигации без торгов (volume=0) исключаем.
+            //    Включаем НКД в цену (грязная цена).
+            //    Если свечи на текущий день нет — берём последнюю известную цену (last_known_price),
+            //    чтобы отсутствие торгов не обнуляло оценку позиции.
             let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
                 .filter(|isin| !defaulted_isins.contains(*isin))
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
-                    simulator
+                    let entry = simulator
                         .price_cache
                         .get(&key)
-                        .filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0)
-                        .map(|&(_, _, low, high, _, facevalue, accint)| {
+                        .or_else(|| simulator.last_known_price.get(isin.as_str()));
+                    entry.filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0).map(
+                        |&(_, _, low, high, _, facevalue, accint)| {
                             let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue + accint)
                                 .unwrap_or(Decimal::ZERO);
                             (isin.clone(), mid_price_rubles)
-                        })
+                        },
+                    )
                 })
                 .collect();
 
             // 5. Вызываем стратегию и исполняем ордера.
+            //    Объёмы торгов: для last_known_price ставим 0 (торговать нельзя, только оценка).
             let bonds_volumes: HashMap<Isin, i64> = bonds_info
                 .keys()
                 .filter(|isin| !defaulted_isins.contains(*isin))
                 .filter_map(|isin| {
                     let key = (current_date, isin.clone());
-                    simulator
-                        .price_cache
-                        .get(&key)
-                        .map(|&(_, _, _, _, volume, _, _)| (isin.clone(), volume as i64))
+                    if let Some(&(_, _, _, _, volume, _, _)) = simulator.price_cache.get(&key) {
+                        Some((isin.clone(), volume as i64))
+                    } else if simulator.last_known_price.contains_key(isin.as_str()) {
+                        // Есть last_known_price, но сегодня нет торгов — объём = 0.
+                        Some((isin.clone(), 0))
+                    } else {
+                        None
+                    }
                 })
                 .collect();
             let portfolio = simulator.portfolio.clone();
@@ -395,6 +411,11 @@ impl BacktestEngine {
 
             // 6. Снимок портфеля на конец дня.
             snapshots.push(simulator.get_portfolio_snapshot());
+
+            // 7. Очищаем price_cache и isins_by_date за текущий день — данные уже в last_known_price.
+            //    Это не даёт кэши расти бесконечно и экономит RAM.
+            simulator.price_cache.retain(|(d, _), _| *d != current_date);
+            simulator.isins_by_date.remove(&current_date);
 
             current_date += chrono::Duration::days(1);
         }
@@ -424,4 +445,130 @@ impl BacktestEngine {
 
 fn decimal_from_f64(value: f64) -> Option<Decimal> {
     value.to_string().parse::<Decimal>().ok()
+}
+
+/// Определяет, является ли облигация флоатером (плавающий купон).
+///
+/// Сравнивает размеры купонных выплат: если хотя бы два купона
+/// отличаются друг от друга — облигация считается флоатером.
+fn is_floater(payments: &[(NaiveDate, f64, &str)]) -> bool {
+    let coupon_sizes: Vec<f64> = payments
+        .iter()
+        .filter(|(_, _, t)| *t == "coupon")
+        .map(|(_, amount, _)| *amount)
+        .collect();
+    if coupon_sizes.len() < 2 {
+        return false;
+    }
+    let first = coupon_sizes[0];
+    coupon_sizes.iter().any(|&s| (s - first).abs() > 0.01)
+}
+
+/// Построить карту `bonds_info` из загруженных данных.
+///
+/// Фильтрует только рублёвые облигации (currency_id = 3) и исключает
+/// структурные (доска TQIR). Для каждой облигации собирает платежи,
+/// оферты, дефолты и купонную информацию.
+///
+/// Используется движком бэктеста, но может быть вызвана отдельно —
+/// например, для анализа портфеля или скоринга облигаций.
+pub async fn build_bonds_info(
+    market_data: &MarketDataClient,
+) -> Result<HashMap<Isin, BondPersistentInfo>, anyhow::Error> {
+    // ID рублёвой валюты (SUR) в таблице bond_currency.
+    const RUB_CURRENCY_ID: i64 = 3;
+    // Доска структурных (инвестиционных) облигаций на MOEX — исключаем.
+    const STRUCTURAL_BOARD: &str = "TQIR";
+
+    let all_bonds = market_data.get_all_bonds(None, None).await?;
+    let bond_id_to_isin: HashMap<i64, Isin> = all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
+
+    let bond_offer_dates = market_data.get_bond_offer_dates().await?;
+    let bond_default_dates = market_data.get_bond_default_dates().await?;
+    let bond_coupons = market_data.get_all_bond_coupons().await?;
+
+    // Загружаем ВСЕ выплаты (без ограничения по дате).
+    let all_payments = market_data
+        .get_all_bond_payments_in_range(
+            NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2099, 12, 31).unwrap(),
+        )
+        .await?;
+
+    let mut bonds_payments: HashMap<Isin, Vec<(NaiveDate, f64, &'static str)>> = HashMap::new();
+    for payment in &all_payments {
+        let Some(date) = payment.date else { continue };
+        let Some(size) = payment.size else { continue };
+        if size <= 0.0 {
+            continue;
+        }
+        let Some(bid) = payment.bond_id else { continue };
+        let Some(isin) = bond_id_to_isin.get(&bid) else {
+            continue;
+        };
+        let type_name: &'static str = match payment.type_id {
+            Some(1) => "amortization",
+            Some(2) => "coupon",
+            Some(14) => "redemption",
+            _ => continue,
+        };
+        bonds_payments
+            .entry(isin.clone())
+            .or_default()
+            .push((date, size as f64, type_name));
+    }
+
+    let bonds_info: HashMap<Isin, BondPersistentInfo> = all_bonds
+        .iter()
+        .filter(|bond| bond.currency_id == Some(RUB_CURRENCY_ID))
+        .filter(|bond| bond.board.as_deref() != Some(STRUCTURAL_BOARD))
+        .filter(|bond| {
+            let dominated = bond.isin.as_ref().and_then(|isin| bonds_payments.get(isin));
+            !dominated.map(|p| is_floater(p)).unwrap_or(false)
+        })
+        .filter_map(|bond| {
+            let isin = bond.isin.clone()?;
+            let payments = bonds_payments
+                .get(&isin)
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|(date, amount, type_name)| {
+                            decimal_from_f64(*amount).map(|d| PaymentInfo {
+                                date: *date,
+                                amount: d,
+                                payment_type: match *type_name {
+                                    "coupon" => PaymentType::Coupon,
+                                    "amortization" => PaymentType::Amortization,
+                                    "redemption" => PaymentType::Redemption,
+                                    _ => PaymentType::Coupon,
+                                },
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let bond_info = BondCommonInfo {
+                isin: isin.clone(),
+                currency_id: bond.currency_id,
+                title: bond.title.clone(),
+                is_subordinated: bond.is_subordinated,
+                issue_volume: bond.issue_volume,
+                placement_date: bond.placement_date,
+                maturity_date: bond.maturity_date,
+                facevalue: bond.facevalue.map(|v| v as f64),
+                start_facevalue: bond.start_facevalue.map(|v| v as f64),
+                board: bond.board.clone(),
+                is_for_qualified_investors: bond.is_for_qualified_investors,
+                is_traded: bond.is_traded,
+                offer_date: bond_offer_dates.get(&bond.id).copied(),
+                default_date: bond_default_dates.get(&bond.id).copied(),
+                coupon_size: bond_coupons.get(&bond.id).and_then(|c| c.size.map(|v| v as f64)),
+                coupon_period: bond_coupons.get(&bond.id).and_then(|c| c.period),
+                coupon_aci: bond_coupons.get(&bond.id).and_then(|c| c.aci.map(|v| v as f64)),
+            };
+            Some((isin, BondPersistentInfo { bond_info, payments }))
+        })
+        .collect();
+
+    Ok(bonds_info)
 }
