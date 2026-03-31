@@ -1,10 +1,6 @@
 use dotenvy::dotenv;
 use rust_decimal::Decimal;
-use std::{
-    collections::{HashMap, HashSet},
-    env,
-    fs::File,
-};
+use std::{collections::HashMap, env};
 use t_invest_api_rust::{
     Client, EndPoint,
     decimal::{money_value_to_decimal, quotation_to_decimal},
@@ -13,9 +9,7 @@ use t_invest_api_rust::{
         PositionsRequest, PostOrderRequest, PriceType, Quotation,
     },
 };
-use trading_strategies::{BondPersistentInfo, Isin, MarketOrder, MarketOrderType, Portfolio};
-
-use std::io::Write;
+use trading_strategies::{Isin, MarketOrder, MarketOrderType, Portfolio};
 
 /// Получает состояние портфеля
 async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
@@ -132,6 +126,7 @@ async fn make_order(
     client.orders.post_order(request).await.unwrap().into_inner();
 }
 
+#[allow(dead_code)]
 async fn make_orders(
     client: &mut Client,
     orders: &Vec<MarketOrder>,
