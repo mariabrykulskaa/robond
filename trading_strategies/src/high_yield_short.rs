@@ -196,10 +196,10 @@ impl Strategy for HighYieldShortStrategy {
         // ── Шаг 4: покупаем ────────────────────────────────────────────────
         let mut free_money = portfolio.free_money;
         for o in &orders {
-            if o.order_type == MarketOrderType::Sell {
-                if let Some(p) = bonds_prices.get(&o.isin) {
-                    free_money += *p * Decimal::from(o.count);
-                }
+            if o.order_type == MarketOrderType::Sell
+                && let Some(p) = bonds_prices.get(&o.isin)
+            {
+                free_money += *p * Decimal::from(o.count);
             }
         }
 
