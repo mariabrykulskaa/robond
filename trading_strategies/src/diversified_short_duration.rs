@@ -54,11 +54,7 @@ impl Default for DiversifiedShortDurationStrategy {
 }
 
 /// Рассчитывает XIRR доходность облигации.
-fn bond_xirr(
-    buy_price: Decimal,
-    current_date: NaiveDate,
-    info: &BondPersistentInfo,
-) -> f64 {
+fn bond_xirr(buy_price: Decimal, current_date: NaiveDate, info: &BondPersistentInfo) -> f64 {
     let mut cash_flow = vec![-buy_price.as_f64()];
     let mut dates = vec![current_date];
     for p in &info.payments {
@@ -189,9 +185,7 @@ impl Strategy for DiversifiedShortDurationStrategy {
                 continue;
             };
             let days_to_maturity = (maturity - current_date).num_days();
-            if days_to_maturity < self.min_days_to_maturity
-                || days_to_maturity > self.max_days_to_maturity
-            {
+            if days_to_maturity < self.min_days_to_maturity || days_to_maturity > self.max_days_to_maturity {
                 continue;
             }
 
