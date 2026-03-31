@@ -29,8 +29,10 @@ pub struct MarketSimulator {
     pub facevalues: HashMap<String, f64>,
     /// Объём выпуска: ISIN -> issue_volume (штук)
     pub issue_volumes: HashMap<String, i64>,
+    /// Индекс: дата -> список ISIN, у которых есть свечи в этот день
+    pub isins_by_date: HashMap<NaiveDate, Vec<String>>,
     /// Последняя известная цена для каждой облигации (для оценки портфеля в нерабочие дни)
-    last_known_price: HashMap<String, PriceEntry>,
+    pub last_known_price: HashMap<String, PriceEntry>,
 }
 
 impl MarketSimulator {
@@ -48,6 +50,7 @@ impl MarketSimulator {
             holdings: HashMap::new(),
             facevalues: HashMap::new(),
             issue_volumes: HashMap::new(),
+            isins_by_date: HashMap::new(),
             last_known_price: HashMap::new(),
         }
     }
@@ -73,6 +76,10 @@ impl MarketSimulator {
         let entry = (open, close, low, high, volume, facevalue, accint);
         self.price_cache.insert((self.current_date, isin.clone()), entry);
         self.last_known_price.insert(isin.clone(), entry);
+        self.isins_by_date
+            .entry(self.current_date)
+            .or_default()
+            .push(isin.clone());
         self.facevalues.entry(isin).or_insert(facevalue);
     }
 

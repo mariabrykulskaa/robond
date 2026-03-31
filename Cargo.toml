@@ -1,7 +1,12 @@
 [workspace]
 resolver = "3"
 members = [
-    "t-invest-api-rust", "trading_strategies", "history_market_data", "backtest_engine", "live_engine",
+    "t-invest-api-rust",
+    "trading_strategies",
+    "history_market_data",
+    "backtest_engine",
+    "live_engine",
+    "portfolio",
 ]
 
 [workspace.dependencies]

@@ -1,8 +1,7 @@
 //! Модуль с торговыми стратегиями
 //!
-//! TODO: добавить хотя бы одну торговую стратегию
-//!
 
+pub mod diversified_short_duration;
 pub mod strategies;
 
 use std::collections::HashMap;
