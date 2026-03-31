@@ -249,6 +249,19 @@ impl BacktestEngine {
             }
         }
 
+        // Индекс дат погашения (maturity): дата -> список ISIN.
+        // Используем для принудительного погашения, если бонд дожил до maturity_date,
+        // но в БД нет платежа type_id=14 (погашение).
+        let mut maturity_isins_by_date: HashMap<NaiveDate, Vec<Isin>> = HashMap::new();
+        for (isin, info) in &bonds_info {
+            if let Some(maturity_date) = info.bond_info.maturity_date {
+                maturity_isins_by_date
+                    .entry(maturity_date)
+                    .or_default()
+                    .push(isin.clone());
+            }
+        }
+
         // Множество дефолтных ISIN — накапливается по мере прохождения дат.
         // Облигации из этого множества исключаются из торгов и выплат.
         let mut defaulted_isins: std::collections::HashSet<Isin> = std::collections::HashSet::new();
@@ -355,8 +368,26 @@ impl BacktestEngine {
                         continue;
                     }
                     if let Some(&facevalue) = simulator.facevalues.get(isin) {
-                        let amount_percent = (amount_rubles / facevalue) * 100.0;
+                        let amount_percent = if facevalue > f64::EPSILON {
+                            (amount_rubles / facevalue) * 100.0
+                        } else {
+                            0.0
+                        };
                         simulator.process_payment(isin.clone(), amount_percent, payment_type.to_string());
+                    }
+                }
+            }
+
+            // 3.5. Принудительное погашение по maturity_date.
+            //   Если в БД нет платежа type_id=14 (погашение), но дата погашения наступила —
+            //   погашаем по текущему номиналу (может быть снижен амортизациями).
+            if let Some(mat_isins) = maturity_isins_by_date.get(&current_date) {
+                for isin in mat_isins {
+                    if let Some(event) = simulator.force_redeem_bond(isin) {
+                        eprintln!(
+                            "  Погашение (maturity): {} — {} шт. на {:.2} руб.",
+                            isin, event.quantity, event.total_amount
+                        );
                     }
                 }
             }
@@ -365,6 +396,7 @@ impl BacktestEngine {
             //    Включаем НКД в цену (грязная цена).
             //    Если свечи на текущий день нет — берём последнюю известную цену (last_known_price),
             //    чтобы отсутствие торгов не обнуляло оценку позиции.
+            let min_vol = simulator.min_volume_for_price;
             let bonds_prices: HashMap<Isin, Decimal> = bonds_info
                 .keys()
                 .filter(|isin| !defaulted_isins.contains(*isin))
@@ -374,7 +406,7 @@ impl BacktestEngine {
                         .price_cache
                         .get(&key)
                         .or_else(|| simulator.last_known_price.get(isin.as_str()));
-                    entry.filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0).map(
+                    entry.filter(|&&(_, _, _, _, volume, _, _)| volume >= min_vol).map(
                         |&(_, _, low, high, _, facevalue, accint)| {
                             let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue + accint)
                                 .unwrap_or(Decimal::ZERO);
@@ -449,19 +481,30 @@ fn decimal_from_f64(value: f64) -> Option<Decimal> {
 
 /// Определяет, является ли облигация флоатером (плавающий купон).
 ///
-/// Сравнивает размеры купонных выплат: если хотя бы два купона
-/// отличаются друг от друга — облигация считается флоатером.
+/// Сравнивает размеры купонных выплат по медиане: если более 30% купонов
+/// отклоняются от медианы более чем на 15%, облигация считается флоатером.
+/// Это позволяет не исключать фиксированные облигации с коротким первым/последним
+/// купонным периодом (первый/последний купон меньше обычного).
 fn is_floater(payments: &[(NaiveDate, f64, &str)]) -> bool {
-    let coupon_sizes: Vec<f64> = payments
+    let mut coupon_sizes: Vec<f64> = payments
         .iter()
         .filter(|(_, _, t)| *t == "coupon")
         .map(|(_, amount, _)| *amount)
         .collect();
-    if coupon_sizes.len() < 2 {
+    if coupon_sizes.len() < 3 {
         return false;
     }
-    let first = coupon_sizes[0];
-    coupon_sizes.iter().any(|&s| (s - first).abs() > 0.01)
+    coupon_sizes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median = coupon_sizes[coupon_sizes.len() / 2];
+    if median < 0.01 {
+        return false;
+    }
+    let outliers = coupon_sizes
+        .iter()
+        .filter(|&&s| ((s - median) / median).abs() > 0.15)
+        .count();
+    // Если более 30% купонов отклоняются от медианы — это флоатер
+    outliers as f64 / coupon_sizes.len() as f64 > 0.30
 }
 
 /// Построить карту `bonds_info` из загруженных данных.
