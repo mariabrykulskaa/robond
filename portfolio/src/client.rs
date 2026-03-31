@@ -33,8 +33,7 @@ impl PortfolioClient {
 
     /// Создать клиент из `.env` файла.
     pub async fn from_env() -> Result<Self> {
-        let config =
-            history_market_data::DbConfig::from_env().map_err(|e| Error::MissingEnvVar(e.to_string()))?;
+        let config = history_market_data::DbConfig::from_env().map_err(|e| Error::MissingEnvVar(e.to_string()))?;
         Self::with_config(&config).await
     }
 
@@ -49,12 +48,11 @@ impl PortfolioClient {
 
     /// Создать новый портфель.
     pub async fn create_portfolio(&self, name: &str) -> Result<Portfolio> {
-        let row = sqlx::query_as::<_, Portfolio>(
-            "INSERT INTO portfolio (name) VALUES ($1) RETURNING id, name, created_at",
-        )
-        .bind(name)
-        .fetch_one(&self.pool)
-        .await?;
+        let row =
+            sqlx::query_as::<_, Portfolio>("INSERT INTO portfolio (name) VALUES ($1) RETURNING id, name, created_at")
+                .bind(name)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(row)
     }
 
@@ -69,23 +67,16 @@ impl PortfolioClient {
 
     /// Список всех портфелей.
     pub async fn list_portfolios(&self) -> Result<Vec<Portfolio>> {
-        let rows = sqlx::query_as::<_, Portfolio>(
-            "SELECT id, name, created_at FROM portfolio ORDER BY created_at",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query_as::<_, Portfolio>("SELECT id, name, created_at FROM portfolio ORDER BY created_at")
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     // ── Позиции (облигации) ────────────────────────────────────
 
     /// Установить количество облигаций ISIN в портфеле (upsert).
-    pub async fn set_holding(
-        &self,
-        portfolio_id: i64,
-        isin: &str,
-        quantity: i64,
-    ) -> Result<PortfolioHolding> {
+    pub async fn set_holding(&self, portfolio_id: i64, isin: &str, quantity: i64) -> Result<PortfolioHolding> {
         let row = sqlx::query_as::<_, PortfolioHolding>(
             "INSERT INTO portfolio_holding (portfolio_id, isin, quantity, updated_at)
              VALUES ($1, $2, $3, now())
@@ -102,12 +93,7 @@ impl PortfolioClient {
     }
 
     /// Изменить количество облигаций на delta (+ покупка, – продажа).
-    pub async fn adjust_holding(
-        &self,
-        portfolio_id: i64,
-        isin: &str,
-        delta: i64,
-    ) -> Result<PortfolioHolding> {
+    pub async fn adjust_holding(&self, portfolio_id: i64, isin: &str, delta: i64) -> Result<PortfolioHolding> {
         let row = sqlx::query_as::<_, PortfolioHolding>(
             "INSERT INTO portfolio_holding (portfolio_id, isin, quantity, updated_at)
              VALUES ($1, $2, $3, now())
@@ -147,12 +133,7 @@ impl PortfolioClient {
     // ── Денежные средства ──────────────────────────────────────
 
     /// Установить сумму свободных денег в портфеле (upsert).
-    pub async fn set_cash(
-        &self,
-        portfolio_id: i64,
-        amount: Decimal,
-        currency: &str,
-    ) -> Result<PortfolioCash> {
+    pub async fn set_cash(&self, portfolio_id: i64, amount: Decimal, currency: &str) -> Result<PortfolioCash> {
         let row = sqlx::query_as::<_, PortfolioCash>(
             "INSERT INTO portfolio_cash (portfolio_id, amount, currency, updated_at)
              VALUES ($1, $2, $3, now())
@@ -260,8 +241,7 @@ impl PortfolioClient {
         prices: &HashMap<String, Decimal>,
     ) -> Result<PortfolioSnapshot> {
         let (bonds_value, cash, total) = self.compute_market_value(portfolio_id, prices).await?;
-        self.save_snapshot(portfolio_id, date, total, cash, bonds_value)
-            .await
+        self.save_snapshot(portfolio_id, date, total, cash, bonds_value).await
     }
 
     /// Получить все снимки портфеля (для графика стоимости), отсортированные по дате.

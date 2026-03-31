@@ -76,7 +76,10 @@ impl MarketSimulator {
         let entry = (open, close, low, high, volume, facevalue, accint);
         self.price_cache.insert((self.current_date, isin.clone()), entry);
         self.last_known_price.insert(isin.clone(), entry);
-        self.isins_by_date.entry(self.current_date).or_default().push(isin.clone());
+        self.isins_by_date
+            .entry(self.current_date)
+            .or_default()
+            .push(isin.clone());
         self.facevalues.entry(isin).or_insert(facevalue);
     }
 
