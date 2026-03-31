@@ -374,13 +374,13 @@ impl BacktestEngine {
                         .price_cache
                         .get(&key)
                         .or_else(|| simulator.last_known_price.get(isin.as_str()));
-                    entry
-                        .filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0)
-                        .map(|&(_, _, low, high, _, facevalue, accint)| {
+                    entry.filter(|&&(_, _, _, _, volume, _, _)| volume > 0.0).map(
+                        |&(_, _, low, high, _, facevalue, accint)| {
                             let mid_price_rubles = decimal_from_f64((low + high) / 2.0 / 100.0 * facevalue + accint)
                                 .unwrap_or(Decimal::ZERO);
                             (isin.clone(), mid_price_rubles)
-                        })
+                        },
+                    )
                 })
                 .collect();
 
@@ -414,7 +414,7 @@ impl BacktestEngine {
 
             // 7. Очищаем price_cache и isins_by_date за текущий день — данные уже в last_known_price.
             //    Это не даёт кэши расти бесконечно и экономит RAM.
-            simulator.price_cache.retain(|&(ref d, _), _| *d != current_date);
+            simulator.price_cache.retain(|(d, _), _| *d != current_date);
             simulator.isins_by_date.remove(&current_date);
 
             current_date += chrono::Duration::days(1);
@@ -481,8 +481,7 @@ pub async fn build_bonds_info(
     const STRUCTURAL_BOARD: &str = "TQIR";
 
     let all_bonds = market_data.get_all_bonds(None, None).await?;
-    let bond_id_to_isin: HashMap<i64, Isin> =
-        all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
+    let bond_id_to_isin: HashMap<i64, Isin> = all_bonds.iter().filter_map(|b| Some((b.id, b.isin.clone()?))).collect();
 
     let bond_offer_dates = market_data.get_bond_offer_dates().await?;
     let bond_default_dates = market_data.get_bond_default_dates().await?;
@@ -504,7 +503,9 @@ pub async fn build_bonds_info(
             continue;
         }
         let Some(bid) = payment.bond_id else { continue };
-        let Some(isin) = bond_id_to_isin.get(&bid) else { continue };
+        let Some(isin) = bond_id_to_isin.get(&bid) else {
+            continue;
+        };
         let type_name: &'static str = match payment.type_id {
             Some(1) => "amortization",
             Some(2) => "coupon",
