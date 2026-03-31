@@ -33,6 +33,8 @@ pub struct MarketSimulator {
     pub isins_by_date: HashMap<NaiveDate, Vec<String>>,
     /// Последняя известная цена для каждой облигации (для оценки портфеля в нерабочие дни)
     pub last_known_price: HashMap<String, PriceEntry>,
+    /// Минимальный объём торгов, при котором цена считается рыночной (для обновления last_known_price)
+    pub min_volume_for_price: f64,
 }
 
 impl MarketSimulator {
@@ -52,6 +54,7 @@ impl MarketSimulator {
             issue_volumes: HashMap::new(),
             isins_by_date: HashMap::new(),
             last_known_price: HashMap::new(),
+            min_volume_for_price: 10.0,
         }
     }
 
@@ -75,7 +78,11 @@ impl MarketSimulator {
     ) {
         let entry = (open, close, low, high, volume, facevalue, accint);
         self.price_cache.insert((self.current_date, isin.clone()), entry);
-        self.last_known_price.insert(isin.clone(), entry);
+        // Обновляем last_known_price только при достаточном объёме торгов.
+        // Свечи с мизерным объёмом (1-2 лота) могут содержать нерыночные цены.
+        if volume >= self.min_volume_for_price {
+            self.last_known_price.insert(isin.clone(), entry);
+        }
         self.isins_by_date
             .entry(self.current_date)
             .or_default()
@@ -94,9 +101,9 @@ impl MarketSimulator {
             .copied()
             .ok_or_else(|| format!("Нет данных о цене для {} на {}", order.isin, self.current_date))?;
 
-        // Если в этот день не было торгов — операции запрещены.
-        if volume == 0.0 {
-            return Err(format!("Нет торгов для {} на {}", order.isin, self.current_date));
+        // Если в этот день не было достаточных торгов — операции запрещены.
+        if volume < self.min_volume_for_price {
+            return Err(format!("Недостаточный объём торгов для {} на {} (volume={})", order.isin, self.current_date, volume));
         }
 
         // Ограничиваем покупку дневным объёмом торгов и объёмом выпуска.
@@ -190,6 +197,38 @@ impl MarketSimulator {
 
         self.portfolio.free_money += decimal_from_f64_option(total_amount)?;
 
+        // При полном погашении обнуляем позицию, чтобы не было двойного учёта
+        // (деньги на счету + облигация в портфеле).
+        if payment_type == "redemption" {
+            self.holdings.insert(isin.clone(), 0);
+            self.portfolio.bonds_count.insert(isin.clone(), 0);
+        }
+
+        // Амортизация уменьшает номинал облигации.
+        // Обновляем facevalues и last_known_price, чтобы оценка портфеля была корректной.
+        if payment_type == "amortization" {
+            if let Some(fv) = self.facevalues.get_mut(&isin) {
+                *fv -= amount_per_unit;
+                if *fv < 0.0 {
+                    *fv = 0.0;
+                }
+            }
+            if let Some(entry) = self.last_known_price.get_mut(&isin) {
+                // entry.5 = facevalue
+                entry.5 -= amount_per_unit;
+                if entry.5 < 0.0 {
+                    entry.5 = 0.0;
+                }
+            }
+            // Если номинал упал до нуля (или ниже) — облигация полностью амортизирована,
+            // это эквивалент погашения. Обнуляем позицию.
+            let remaining_fv = self.facevalues.get(&isin).copied().unwrap_or(0.0);
+            if remaining_fv <= f64::EPSILON {
+                self.holdings.insert(isin.clone(), 0);
+                self.portfolio.bonds_count.insert(isin.clone(), 0);
+            }
+        }
+
         let event = PaymentEvent {
             date: self.current_date,
             isin,
@@ -258,7 +297,13 @@ impl MarketSimulator {
         for (isin, quantity) in &self.holdings {
             if *quantity > 0 {
                 let key = (self.current_date, isin.clone());
-                let price_entry = self.price_cache.get(&key).or_else(|| self.last_known_price.get(isin));
+                // Берём свечу текущего дня, но только если объём достаточный.
+                // Иначе фоллбечим на last_known_price с последнего дня нормальных торгов.
+                let price_entry = self
+                    .price_cache
+                    .get(&key)
+                    .filter(|e| e.4 >= self.min_volume_for_price)
+                    .or_else(|| self.last_known_price.get(isin.as_str()));
                 if let Some(&(_, close, _, _, _, facevalue, accint)) = price_entry {
                     let price_per_unit = (close / 100.0) * facevalue + accint;
                     total += price_per_unit * *quantity as f64;
