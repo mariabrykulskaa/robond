@@ -54,7 +54,7 @@ use t_invest_api_rust::{
 use trading_strategies::{Isin, MarketOrder, MarketOrderType, Portfolio, Strategy};
 
 /// Получает состояние портфеля
-async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
+pub async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
     let response = client
         .operations
         .get_positions(PositionsRequest {
@@ -81,7 +81,7 @@ async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
     }
 }
 
-async fn get_ticker_to_info(client: &mut Client) -> HashMap<String, Bond> {
+pub async fn get_ticker_to_info(client: &mut Client) -> HashMap<String, Bond> {
     let mut request = InstrumentsRequest::default();
     request.set_instrument_status(InstrumentStatus::Base);
     let response = client.instruments.bonds(request).await.unwrap().into_inner();
@@ -98,7 +98,7 @@ async fn get_ticker_to_info(client: &mut Client) -> HashMap<String, Bond> {
     ticker_to_info
 }
 
-fn get_price(points: Quotation, bond_info: &Bond) -> Option<Decimal> {
+pub fn get_price(points: Quotation, bond_info: &Bond) -> Option<Decimal> {
     let points = quotation_to_decimal(points);
     if !bond_info.buy_available_flag || !bond_info.sell_available_flag {
         return None;
@@ -111,7 +111,7 @@ fn get_price(points: Quotation, bond_info: &Bond) -> Option<Decimal> {
     Some(price)
 }
 
-async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bond>) -> HashMap<String, Decimal> {
+pub async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bond>) -> HashMap<String, Decimal> {
     let mut ids = Vec::<String>::new();
     for (ticker, bond_info) in ticker_to_info {
         ids.push(format!("{}_{}", ticker, bond_info.class_code));
@@ -145,7 +145,7 @@ async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bond>)
     prices
 }
 
-async fn make_order(
+pub async fn make_order(
     client: &mut Client,
     order: &MarketOrder,
     ticker_to_info: &HashMap<String, Bond>,
@@ -168,8 +168,7 @@ async fn make_order(
     client.orders.post_order(request).await.unwrap().into_inner();
 }
 
-#[allow(dead_code)]
-async fn make_orders(
+pub async fn make_orders(
     client: &mut Client,
     orders: &Vec<MarketOrder>,
     ticker_to_info: &HashMap<String, Bond>,
