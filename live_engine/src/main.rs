@@ -1,3 +1,5 @@
+//! Модуль для работы торгового робота в реальном времени
+
 use dotenvy::dotenv;
 use rust_decimal::Decimal;
 use std::{collections::HashMap, env};
