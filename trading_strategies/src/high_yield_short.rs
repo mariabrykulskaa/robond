@@ -35,10 +35,10 @@ impl Default for HighYieldShortStrategy {
             max_weight: 0.08,
             min_days_to_maturity: 14,
             max_days_to_maturity: 400,
-            min_price_pct: 60.0,
+            min_price_pct: 75.0,
             max_price_pct: 120.0,
             stop_loss_pct: 70.0,
-            min_yield: 0.22,
+            min_yield: 0.10,
         }
     }
 }

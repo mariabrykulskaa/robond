@@ -46,7 +46,7 @@ impl Default for YieldMaximizerStrategy {
             max_weight: 0.05,
             min_days_to_maturity: 14,
             min_price_pct: 75.0,
-            max_price_pct: 115.0,
+            max_price_pct: 120.0,
             min_yield: 0.01,
             max_yield: 0.45,
             min_yield_urgent: 0.005,
