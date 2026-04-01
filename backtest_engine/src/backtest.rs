@@ -86,7 +86,7 @@ impl BacktestEngine {
             bond_default_dates.len(),
             t_defaults.elapsed().as_secs_f64()
         );
-        // Загружаем все свечи за весь период одним запросом (без JSON — экономия памяти).
+        // Загружаем все свечи за весь период одним запросом.
         eprintln!(
             "  Загрузка всех свечей за период {}..{} ...",
             self.start_date, self.end_date
