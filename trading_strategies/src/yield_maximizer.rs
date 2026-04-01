@@ -38,6 +38,8 @@ pub struct YieldMaximizerStrategy {
     /// Крайняя дата: не покупаем бонды с погашением после этой даты.
     /// Должна быть <= end_date бэктеста (или чуть раньше для буфера).
     pub hard_deadline: NaiveDate,
+    /// Порог стоп-лосса: продаём, если цена упала ниже этого уровня (% от номинала)
+    pub stop_loss_pct: f64,
 }
 
 impl Default for YieldMaximizerStrategy {
@@ -53,6 +55,7 @@ impl Default for YieldMaximizerStrategy {
             cash_urgency_threshold: 0.30,
             min_volume_for_buy: 50,
             hard_deadline: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            stop_loss_pct: 70.0,
         }
     }
 }
@@ -105,8 +108,31 @@ impl Strategy for YieldMaximizerStrategy {
 
         let mut orders = Vec::new();
 
-        // НЕТ стоп-лосса. Дефолты обрабатываются движком (write_off при цене < 20%).
-        // Держим до погашения — не кристаллизуем бумажные убытки.
+        // ── Шаг 1: стоп-лосс — продаём бумаги, которые сильно упали ───────
+        for (isin, &count) in &portfolio.bonds_count {
+            if count <= 0 {
+                continue;
+            }
+            if let Some(price) = bonds_prices.get(isin) {
+                let price_f64 = price.to_f64().unwrap_or(0.0);
+                let facevalue = bonds_info
+                    .get(isin)
+                    .and_then(|i| i.bond_info.facevalue)
+                    .unwrap_or(1000.0);
+                let price_pct = if facevalue > 0.0 {
+                    (price_f64 / facevalue) * 100.0
+                } else {
+                    100.0
+                };
+                if price_pct < self.stop_loss_pct && price_pct > 0.0 {
+                    orders.push(MarketOrder {
+                        isin: isin.clone(),
+                        order_type: MarketOrderType::Sell,
+                        count,
+                    });
+                }
+            }
+        }
 
         // ── Текущие веса позиций ────────────────────────────────────────
         let mut current_weights: HashMap<&Isin, f64> = HashMap::new();
