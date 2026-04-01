@@ -97,13 +97,12 @@ pub async fn run_strategy(
         .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
 
     // Get T-Invest credentials
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let row: Option<(Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let (token, account_id, endpoint) = match row {
         Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".to_string())),
@@ -139,19 +138,13 @@ pub async fn run_strategy(
     let mut holdings_imported = 0;
     for (isin, &quantity) in &tinvest_portfolio.bonds_count {
         if quantity > 0 {
-            state
-                .portfolio_client
-                .set_holding(portfolio_id, isin, quantity)
-                .await?;
+            state.portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
             holdings_imported += 1;
         }
     }
 
     let cash = tinvest_portfolio.free_money;
-    state
-        .portfolio_client
-        .set_cash(portfolio_id, cash, "RUB")
-        .await?;
+    state.portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
 
     Ok(Json(RunResult {
         orders_count: holdings_imported,

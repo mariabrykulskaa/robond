@@ -1,7 +1,7 @@
 use axum::extract::State;
 use axum::Json;
 
-use crate::auth::jwt::{encode_access_token, encode_refresh_token, decode_token};
+use crate::auth::jwt::{decode_token, encode_access_token, encode_refresh_token};
 use crate::auth::models::*;
 use crate::auth::password::{hash_password, verify_password};
 use crate::error::AppError;
@@ -18,8 +18,7 @@ pub async fn signup(
         return Err(AppError::BadRequest("password must be at least 6 characters".into()));
     }
 
-    let password_hash = hash_password(&req.password)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let password_hash = hash_password(&req.password).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let user = sqlx::query_as::<_, User>(
         "INSERT INTO app_user (email, password_hash) VALUES ($1, $2) RETURNING id, email, password_hash, created_at",
@@ -35,10 +34,10 @@ pub async fn signup(
         other => AppError::Internal(other.to_string()),
     })?;
 
-    let access_token = encode_access_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let refresh_token = encode_refresh_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let access_token =
+        encode_access_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
+    let refresh_token =
+        encode_refresh_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(AuthResponse {
         access_token,
@@ -54,25 +53,22 @@ pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM app_user WHERE email = $1",
-    )
-    .bind(&req.email)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?
-    .ok_or(AppError::Unauthorized)?;
+    let user = sqlx::query_as::<_, User>("SELECT id, email, password_hash, created_at FROM app_user WHERE email = $1")
+        .bind(&req.email)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::Unauthorized)?;
 
-    let valid = verify_password(&req.password, &user.password_hash)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let valid = verify_password(&req.password, &user.password_hash).map_err(|e| AppError::Internal(e.to_string()))?;
     if !valid {
         return Err(AppError::Unauthorized);
     }
 
-    let access_token = encode_access_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let refresh_token = encode_refresh_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let access_token =
+        encode_access_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
+    let refresh_token =
+        encode_refresh_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(AuthResponse {
         access_token,
@@ -90,19 +86,17 @@ pub async fn refresh(
 ) -> Result<Json<AuthResponse>, AppError> {
     let claims = decode_token(&req.refresh_token, &state.jwt_secret)?;
 
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM app_user WHERE id = $1",
-    )
-    .bind(claims.sub)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?
-    .ok_or(AppError::Unauthorized)?;
+    let user = sqlx::query_as::<_, User>("SELECT id, email, password_hash, created_at FROM app_user WHERE id = $1")
+        .bind(claims.sub)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::Unauthorized)?;
 
-    let access_token = encode_access_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let refresh_token = encode_refresh_token(user.id, &state.jwt_secret)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let access_token =
+        encode_access_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
+    let refresh_token =
+        encode_refresh_token(user.id, &state.jwt_secret).map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(AuthResponse {
         access_token,

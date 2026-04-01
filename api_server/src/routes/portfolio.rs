@@ -27,7 +27,10 @@ pub async fn create(
     if req.name.is_empty() {
         return Err(AppError::BadRequest("name is required".into()));
     }
-    let portfolio = state.portfolio_client.create_portfolio_for_user(user_id, &req.name).await?;
+    let portfolio = state
+        .portfolio_client
+        .create_portfolio_for_user(user_id, &req.name)
+        .await?;
     Ok(Json(serde_json::to_value(portfolio).unwrap()))
 }
 
