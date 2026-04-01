@@ -39,8 +39,15 @@ impl PortfolioClient {
 
     /// Применить миграции (создать таблицы, если их нет).
     pub async fn run_migrations(&self) -> Result<()> {
-        let sql = include_str!("../migrations/001_create_portfolio_tables.sql");
-        sqlx::raw_sql(sql).execute(&self.pool).await?;
+        let migrations = [
+            include_str!("../migrations/001_create_portfolio_tables.sql"),
+            include_str!("../migrations/002_create_users_table.sql"),
+            include_str!("../migrations/003_add_user_id_to_portfolio.sql"),
+            include_str!("../migrations/004_add_tinvest_and_strategy.sql"),
+        ];
+        for sql in migrations {
+            sqlx::raw_sql(sql).execute(&self.pool).await?;
+        }
         Ok(())
     }
 
@@ -49,7 +56,7 @@ impl PortfolioClient {
     /// Создать новый портфель.
     pub async fn create_portfolio(&self, name: &str) -> Result<Portfolio> {
         let row =
-            sqlx::query_as::<_, Portfolio>("INSERT INTO portfolio (name) VALUES ($1) RETURNING id, name, created_at")
+            sqlx::query_as::<_, Portfolio>("INSERT INTO portfolio (name) VALUES ($1) RETURNING id, name, user_id, strategy_name, strategy_running, created_at")
                 .bind(name)
                 .fetch_one(&self.pool)
                 .await?;
@@ -58,7 +65,7 @@ impl PortfolioClient {
 
     /// Получить портфель по id.
     pub async fn get_portfolio(&self, portfolio_id: i64) -> Result<Portfolio> {
-        sqlx::query_as::<_, Portfolio>("SELECT id, name, created_at FROM portfolio WHERE id = $1")
+        sqlx::query_as::<_, Portfolio>("SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio WHERE id = $1")
             .bind(portfolio_id)
             .fetch_optional(&self.pool)
             .await?
@@ -67,10 +74,76 @@ impl PortfolioClient {
 
     /// Список всех портфелей.
     pub async fn list_portfolios(&self) -> Result<Vec<Portfolio>> {
-        let rows = sqlx::query_as::<_, Portfolio>("SELECT id, name, created_at FROM portfolio ORDER BY created_at")
+        let rows = sqlx::query_as::<_, Portfolio>("SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio ORDER BY created_at")
             .fetch_all(&self.pool)
             .await?;
         Ok(rows)
+    }
+
+    // ── Методы с привязкой к пользователю ─────────────────────
+
+    /// Создать портфель для конкретного пользователя.
+    pub async fn create_portfolio_for_user(&self, user_id: i64, name: &str) -> Result<Portfolio> {
+        let row = sqlx::query_as::<_, Portfolio>(
+            "INSERT INTO portfolio (name, user_id) VALUES ($1, $2) RETURNING id, name, user_id, strategy_name, strategy_running, created_at",
+        )
+        .bind(name)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    /// Список портфелей пользователя.
+    pub async fn list_portfolios_for_user(&self, user_id: i64) -> Result<Vec<Portfolio>> {
+        let rows = sqlx::query_as::<_, Portfolio>(
+            "SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio WHERE user_id = $1 ORDER BY created_at",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    /// Получить портфель по id, проверяя принадлежность пользователю.
+    pub async fn get_portfolio_for_user(&self, user_id: i64, portfolio_id: i64) -> Result<Portfolio> {
+        sqlx::query_as::<_, Portfolio>(
+            "SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio WHERE id = $1 AND user_id = $2",
+        )
+        .bind(portfolio_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(Error::PortfolioNotFound(portfolio_id))
+    }
+
+    // ── Стратегии ──────────────────────────────────────────────
+
+    /// Назначить стратегию на портфель.
+    pub async fn set_strategy(&self, portfolio_id: i64, strategy_name: &str) -> Result<Portfolio> {
+        sqlx::query_as::<_, Portfolio>(
+            "UPDATE portfolio SET strategy_name = $2, strategy_running = false
+             WHERE id = $1
+             RETURNING id, name, user_id, strategy_name, strategy_running, created_at",
+        )
+        .bind(portfolio_id)
+        .bind(strategy_name)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(Error::PortfolioNotFound(portfolio_id))
+    }
+
+    /// Убрать стратегию с портфеля.
+    pub async fn clear_strategy(&self, portfolio_id: i64) -> Result<Portfolio> {
+        sqlx::query_as::<_, Portfolio>(
+            "UPDATE portfolio SET strategy_name = NULL, strategy_running = false
+             WHERE id = $1
+             RETURNING id, name, user_id, strategy_name, strategy_running, created_at",
+        )
+        .bind(portfolio_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(Error::PortfolioNotFound(portfolio_id))
     }
 
     // ── Позиции (облигации) ────────────────────────────────────
