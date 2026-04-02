@@ -1,17 +1,57 @@
-//! Модуль для работы торгового робота в реальном времени
+//! Модуль для работы торгового робота в реальном времени.
+//!
+//! Пример точки входа:
+//!
+//! ```no_run
+//! use chrono::NaiveDate;
+//! use live_engine::run;
+//!
+//! use dotenvy::dotenv;
+//! use rust_decimal::Decimal;
+//! use t_invest_api_rust::{Client, EndPoint};
+//! use trading_strategies::{BondPersistentInfo, Isin, MarketOrder, Portfolio, Strategy};
+//! use std::{collections::HashMap, env};
+//!
+//! /// Стратегия-заглушка: ничего не делает, позволяет проверить движок без логики.
+//! struct DoNothingStrategy;
+//!
+//! impl Strategy for DoNothingStrategy {
+//!     fn decide_trades(
+//!         &self,
+//!         _date: NaiveDate,
+//!         _portfolio: &Portfolio,
+//!         _bonds_info: &HashMap<Isin, BondPersistentInfo>,
+//!         _bonds_prices: &HashMap<Isin, Decimal>,
+//!         _bonds_volumes: &HashMap<Isin, i64>,
+//!     ) -> Vec<MarketOrder> {
+//!         vec![]
+//!     }
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     dotenv().ok();
+//!     let sandbox_token = env::var("SANDBOX_TOKEN").unwrap();
+//!     let account_id = env::var("ACCOUNT_ID").unwrap();
+//!
+//!     let mut client = Client::try_new(sandbox_token, EndPoint::Sandbox).await.unwrap();
+//!
+//!     run(&account_id, &mut client, DoNothingStrategy).await;
+//! }
+//! ```
 
-use dotenvy::dotenv;
+use backtest_engine::build_bonds_info;
 use rust_decimal::Decimal;
-use std::{collections::HashMap, env};
+use std::collections::HashMap;
 use t_invest_api_rust::{
-    Client, EndPoint,
+    Client,
     decimal::{money_value_to_decimal, quotation_to_decimal},
     proto::{
         Bond, GetLastPricesRequest, InstrumentStatus, InstrumentsRequest, LastPriceType, OrderDirection, OrderType,
         PositionsRequest, PostOrderRequest, PriceType, Quotation,
     },
 };
-use trading_strategies::{Isin, MarketOrder, MarketOrderType, Portfolio};
+use trading_strategies::{Isin, MarketOrder, MarketOrderType, Portfolio, Strategy};
 
 /// Получает состояние портфеля
 async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
@@ -140,32 +180,30 @@ async fn make_orders(
     }
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
-    let sandbox_token = env::var("SANDBOX_TOKEN").unwrap();
-    let account_id = env::var("ACCOUNT_ID").unwrap();
+use chrono::prelude::*;
 
-    let mut client = Client::try_new(sandbox_token, EndPoint::Sandbox).await.unwrap();
+use history_market_data::MarketDataClient;
 
-    let portfolio = get_portfolio(&mut client, &account_id).await;
-    dbg!(&portfolio);
+pub async fn run<T: Strategy>(account_id: &str, client: &mut Client, stgategy: T) {
+    let portfolio = get_portfolio(client, account_id).await;
+    let ticker_to_info = get_ticker_to_info(client).await;
+    let prices = get_prices(client, &ticker_to_info).await;
 
-    let ticker_to_info = get_ticker_to_info(&mut client).await;
-    let prices = get_prices(&mut client, &ticker_to_info).await;
+    let md_client = MarketDataClient::from_env().await.unwrap();
 
-    let ticker = "SU26248RMFS3";
+    let bonds_info = build_bonds_info(&md_client).await.unwrap();
 
-    dbg!(&prices.get(ticker).unwrap());
+    let mut bonds_volumes = HashMap::<String, i64>::new();
+    for (ticker, _bond_info) in bonds_info.iter() {
+        bonds_volumes.insert(ticker.to_string(), 1_000_000_000);
+    }
 
-    let market_order = MarketOrder {
-        isin: ticker.to_string(),
-        count: 1,
-        order_type: MarketOrderType::Buy,
-    };
-
-    make_order(&mut client, &market_order, &ticker_to_info, &account_id).await;
-
-    let portfolio = get_portfolio(&mut client, &account_id).await;
-    dbg!(&portfolio);
+    let orders = stgategy.decide_trades(
+        Local::now().date_naive(),
+        &portfolio,
+        &bonds_info,
+        &prices,
+        &bonds_volumes,
+    );
+    make_orders(client, &orders, &ticker_to_info, account_id).await;
 }
