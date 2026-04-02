@@ -1076,6 +1076,7 @@ version = "0.1.0"
 dependencies = [
  "backtest_engine",
  "chrono",
+ "dotenvy",
  "history_market_data",
  "rust_decimal",
  "t-invest-api-rust",

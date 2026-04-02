@@ -11,3 +11,6 @@ trading_strategies = { workspace = true }
 history_market_data = { workspace = true }
 chrono = { workspace = true }
 backtest_engine = { workspace = true }
+
+[dev-dependencies]
+dotenvy = { workspace = true }
