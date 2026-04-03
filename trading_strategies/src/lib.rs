@@ -2,7 +2,9 @@
 //!
 
 pub mod diversified_short_duration;
+pub mod high_yield_short;
 pub mod strategies;
+pub mod yield_maximizer;
 
 use std::collections::HashMap;
 
