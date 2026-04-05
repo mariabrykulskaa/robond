@@ -3,6 +3,3 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "api_server"
-healthcheckPath = "/api/strategies"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
