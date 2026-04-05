@@ -103,7 +103,10 @@ impl MarketSimulator {
 
         // Если в этот день не было достаточных торгов — операции запрещены.
         if volume < self.min_volume_for_price {
-            return Err(format!("Недостаточный объём торгов для {} на {} (volume={})", order.isin, self.current_date, volume));
+            return Err(format!(
+                "Недостаточный объём торгов для {} на {} (volume={})",
+                order.isin, self.current_date, volume
+            ));
         }
 
         // Ограничиваем покупку дневным объёмом торгов и объёмом выпуска.

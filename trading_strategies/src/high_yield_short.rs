@@ -168,9 +168,7 @@ impl Strategy for HighYieldShortStrategy {
                 continue;
             };
             let days_to_maturity = (maturity - current_date).num_days();
-            if days_to_maturity < self.min_days_to_maturity
-                || days_to_maturity > self.max_days_to_maturity
-            {
+            if days_to_maturity < self.min_days_to_maturity || days_to_maturity > self.max_days_to_maturity {
                 continue;
             }
 

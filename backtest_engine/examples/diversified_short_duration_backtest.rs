@@ -36,7 +36,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    - Мин. XIRR для покупки: {:.0}%", strategy.min_yield * 100.0);
     println!("    - Макс. XIRR (distress): {:.0}%", strategy.max_yield * 100.0);
     println!("    - Мин. XIRR (urgent):    {:.0}%", strategy.min_yield_urgent * 100.0);
-    println!("    - Порог urgent кэша:     {:.0}%", strategy.cash_urgency_threshold * 100.0);
+    println!(
+        "    - Порог urgent кэша:     {:.0}%",
+        strategy.cash_urgency_threshold * 100.0
+    );
     println!("    - Макс. вес позиции:     {:.0}%", strategy.max_weight * 100.0);
     println!("    - Мин. объём для покупки: {} лотов", strategy.min_volume_for_buy);
     println!("    - Hard deadline:         {}", strategy.hard_deadline);
@@ -114,11 +117,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             0.0
         };
 
-        println!("\nРиск-метрики (только рабочие дни, {} точек):", weekday_snapshots.len());
+        println!(
+            "\nРиск-метрики (только рабочие дни, {} точек):",
+            weekday_snapshots.len()
+        );
         println!("  Средняя дневная доходность: {:.6}%", mean * 100.0);
         println!("  Стд. откл. дневной дох.:    {:.6}%", std_dev * 100.0);
         println!("  Годовая доходность:         {:.2}%", mean * 252.0 * 100.0);
-        println!("  Годовое стд. откл.:         {:.2}%", std_dev * (252.0_f64).sqrt() * 100.0);
+        println!(
+            "  Годовое стд. откл.:         {:.2}%",
+            std_dev * (252.0_f64).sqrt() * 100.0
+        );
         println!("  Sharpe Ratio (rf=18%):       {:.4}", sharpe);
     }
 
