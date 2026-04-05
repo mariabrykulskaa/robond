@@ -36,12 +36,12 @@ pub async fn list_strategies() -> Json<Vec<StrategyInfo>> {
         StrategyInfo {
             id: "high_yield_short".into(),
             name: "Агрессивная".into(),
-            description: "Высокодоходные короткие облигации (до 1 года) с XIRR ≥ 10 %. Не более 8 % на одну бумагу, стоп-лосс при падении ниже 70 %. Баланс между доходностью и контролем рисков.".into(),
+            description: "Максимальная доходность на коротких облигациях (до 1 года) с XIRR ≥ 10 %. Не более 8 % на одну бумагу, стоп-лосс при падении ниже 70 %. Высокая доходность, повышенный риск.".into(),
         },
         StrategyInfo {
             id: "yield_maximizer".into(),
             name: "Умеренная".into(),
-            description: "Максимизация доходности: покупка облигаций с наивысшим XIRR, не более 5 % на бумагу. Удержание до погашения, динамическое снижение порога при избытке кэша. Высокая доходность, повышенный риск.".into(),
+            description: "Сбалансированный подход: покупка облигаций с оптимальным XIRR, не более 5 % на бумагу. Удержание до погашения, динамическое снижение порога при избытке кэша. Баланс между доходностью и контролем рисков.".into(),
         },
     ])
 }
@@ -142,7 +142,9 @@ pub async fn run_strategy(
     }
 
     // Auto-import: sync portfolio from T-Invest after strategy execution
-    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id).await;
+    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
 
     let mut holdings_imported = 0;
     for (isin, &quantity) in &tinvest_portfolio.bonds_count {
