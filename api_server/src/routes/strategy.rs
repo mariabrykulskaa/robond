@@ -24,19 +24,24 @@ pub struct RunResult {
     pub message: String,
 }
 
-const VALID_STRATEGIES: &[&str] = &["diversified_short_duration", "yield_maximizer"];
+const VALID_STRATEGIES: &[&str] = &["diversified_short_duration", "high_yield_short", "yield_maximizer"];
 
 pub async fn list_strategies() -> Json<Vec<StrategyInfo>> {
     Json(vec![
         StrategyInfo {
             id: "diversified_short_duration".into(),
-            name: "Diversified Short Duration".into(),
-            description: "Диверсифицированная стратегия коротких облигаций (3-18 мес). Покупает облигации с дисконтом, max 15% на бумагу, стоп-лосс при падении ниже 70%.".into(),
+            name: "Консервативная".into(),
+            description: "Диверсифицированный портфель коротких облигаций (3–18 мес.) с дисконтом к номиналу. Не более 15 % на одну бумагу, автоматический стоп-лосс при падении цены ниже 70 %. Низкий риск, стабильная доходность.".into(),
+        },
+        StrategyInfo {
+            id: "high_yield_short".into(),
+            name: "Агрессивная".into(),
+            description: "Высокодоходные короткие облигации (до 1 года) с XIRR ≥ 10 %. Не более 8 % на одну бумагу, стоп-лосс при падении ниже 70 %. Баланс между доходностью и контролем рисков.".into(),
         },
         StrategyInfo {
             id: "yield_maximizer".into(),
-            name: "Yield Maximizer".into(),
-            description: "Максимизация доходности. Покупает бонды с XIRR >= 16%, max 5% на бумагу. Нет стоп-лосса — держит до погашения. Динамический порог при избытке кэша.".into(),
+            name: "Умеренная".into(),
+            description: "Максимизация доходности: покупка облигаций с наивысшим XIRR, не более 5 % на бумагу. Удержание до погашения, динамическое снижение порога при избытке кэша. Высокая доходность, повышенный риск.".into(),
         },
     ])
 }
@@ -123,6 +128,10 @@ pub async fn run_strategy(
     match strategy_name.as_str() {
         "diversified_short_duration" => {
             let strat = trading_strategies::diversified_short_duration::DiversifiedShortDurationStrategy::default();
+            live_engine::run(&account_id, &mut client, strat).await;
+        }
+        "high_yield_short" => {
+            let strat = trading_strategies::high_yield_short::HighYieldShortStrategy::default();
             live_engine::run(&account_id, &mut client, strat).await;
         }
         "yield_maximizer" => {
