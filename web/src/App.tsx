@@ -22,7 +22,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/robond">
           <Routes>
             <Route
               path="/login"

@@ -277,6 +277,12 @@ body {
   background: #fff;
 }
 
+.modal-actions .btn-primary {
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+}
+
 /* Portfolio detail */
 .back-link {
   display: inline-block;
