@@ -2,4 +2,4 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "api_server"
+startCommand = "echo \"ENV CHECK: JWT_SECRET is $(if [ -n \"$JWT_SECRET\" ]; then echo SET; else echo MISSING; fi), PORT=$PORT\" && api_server"
