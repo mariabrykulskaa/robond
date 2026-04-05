@@ -9,7 +9,7 @@ export default function PortfolioListPage() {
   const [newName, setNewName] = useState("");
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || createMutation.isPending) return;
     await createMutation.mutateAsync(newName.trim());
     setNewName("");
     setShowModal(false);
@@ -56,8 +56,8 @@ export default function PortfolioListPage() {
             />
             <div className="modal-actions">
               <button onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreate}>
-                Create
+              <button className="btn-primary" onClick={handleCreate} disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create"}
               </button>
             </div>
           </div>
