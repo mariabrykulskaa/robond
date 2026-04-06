@@ -10,6 +10,7 @@ use crate::state::AppState;
 pub struct FetchAccountsRequest {
     pub token: String,
     pub endpoint: String,
+    pub initial_amount: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -78,21 +79,22 @@ pub async fn fetch_accounts(
                 .map_err(|e| AppError::Internal(format!("Failed to create sandbox account: {e}")))?
                 .into_inner();
 
-            // Top up with 1,000,000 RUB
+            // Top up sandbox account
+            let amount = req.initial_amount.unwrap_or(1_000_000);
             client
                 .sandbox
                 .sandbox_pay_in(t_invest_api_rust::proto::SandboxPayInRequest {
                     account_id: new_acc.account_id.clone(),
                     amount: Some(t_invest_api_rust::proto::MoneyValue {
                         currency: "RUB".to_string(),
-                        units: 1_000_000,
+                        units: amount,
                         nano: 0,
                     }),
                 })
                 .await
                 .map_err(|e| AppError::Internal(format!("Failed to top up sandbox: {e}")))?;
 
-            tracing::info!("Auto-created sandbox account {} with 1,000,000 RUB", new_acc.account_id);
+            tracing::info!("Auto-created sandbox account {} with {} RUB", new_acc.account_id, amount);
 
             resp = client
                 .sandbox

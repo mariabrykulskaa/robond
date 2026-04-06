@@ -18,6 +18,7 @@ export default function SettingsPage() {
   // Step 1: token input
   const [token, setToken] = useState("");
   const [endpoint, setEndpoint] = useState("sandbox");
+  const [sandboxAmount, setSandboxAmount] = useState("1000000");
   const [fetchingAccounts, setFetchingAccounts] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,7 +35,11 @@ export default function SettingsPage() {
     setError("");
     setAccounts(null);
     try {
-      const result = await tinvestApi.fetchAccounts(token, endpoint);
+      const result = await tinvestApi.fetchAccounts(
+        token,
+        endpoint,
+        endpoint === "sandbox" ? Number(sandboxAmount) || 1000000 : undefined
+      );
       if (result.length === 0) {
         setError("No accounts found for this token");
       } else {
@@ -143,6 +148,26 @@ export default function SettingsPage() {
                   <option value="sandbox">Sandbox</option>
                   <option value="production">Production</option>
                 </select>
+                {endpoint === "sandbox" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="number"
+                      placeholder="Сумма (₽)"
+                      value={sandboxAmount}
+                      onChange={(e) => setSandboxAmount(e.target.value)}
+                      min={1000}
+                      step={1000}
+                      style={{
+                        padding: "10px 12px",
+                        border: "1px solid #ddd",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        flex: 1,
+                      }}
+                    />
+                    <span style={{ color: "#888", fontSize: 13, whiteSpace: "nowrap" }}>₽ на виртуальный счёт</span>
+                  </div>
+                )}
                 <button
                   className="btn-primary"
                   onClick={handleFetchAccounts}

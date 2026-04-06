@@ -19,11 +19,13 @@ export interface ImportResult {
 
 export async function fetchAccounts(
   token: string,
-  endpoint: string
+  endpoint: string,
+  initialAmount?: number
 ): Promise<AccountInfo[]> {
   const { data } = await api.post<AccountInfo[]>("/tinvest/accounts", {
     token,
     endpoint,
+    initial_amount: initialAmount || undefined,
   });
   return data;
 }
