@@ -287,14 +287,12 @@ export default function PortfolioDetailPage() {
                     <span className="bond-info-label">ISIN</span>
                     <span>{selectedBond.isin}</span>
                   </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">FIGI</span>
-                    <span>{selectedBond.figi}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Валюта</span>
-                    <span>{selectedBond.currency}</span>
-                  </div>
+                  {selectedBond.currency && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Валюта</span>
+                      <span>{selectedBond.currency}</span>
+                    </div>
+                  )}
                   {selectedBond.nominal && (
                     <div className="bond-info-row">
                       <span className="bond-info-label">Номинал</span>
@@ -307,45 +305,71 @@ export default function PortfolioDetailPage() {
                       <span>{Number(selectedBond.aci_value).toLocaleString("ru-RU")} {selectedBond.currency}</span>
                     </div>
                   )}
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Купонов в год</span>
-                    <span>{selectedBond.coupon_quantity_per_year}</span>
-                  </div>
+                  {selectedBond.coupon_amount && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Размер купона</span>
+                      <span>{selectedBond.coupon_amount}</span>
+                    </div>
+                  )}
+                  {selectedBond.coupon_type && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Тип купона</span>
+                      <span>{selectedBond.coupon_type}</span>
+                    </div>
+                  )}
+                  {selectedBond.coupon_quantity_per_year && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Купонов в год</span>
+                      <span>{selectedBond.coupon_quantity_per_year}</span>
+                    </div>
+                  )}
+                  {selectedBond.next_coupon_date && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Следующий купон</span>
+                      <span>{selectedBond.next_coupon_date}</span>
+                    </div>
+                  )}
                   {selectedBond.maturity_date && (
                     <div className="bond-info-row">
                       <span className="bond-info-label">Дата погашения</span>
                       <span>{selectedBond.maturity_date}</span>
                     </div>
                   )}
-                  {selectedBond.placement_date && (
+                  {selectedBond.country_of_risk_name && (
                     <div className="bond-info-row">
-                      <span className="bond-info-label">Дата размещения</span>
-                      <span>{selectedBond.placement_date}</span>
+                      <span className="bond-info-label">Страна</span>
+                      <span>{selectedBond.country_of_risk_name}</span>
+                    </div>
+                  )}
+                  {selectedBond.sector && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Сектор</span>
+                      <span>{selectedBond.sector}</span>
+                    </div>
+                  )}
+                  {selectedBond.exchange && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Биржа</span>
+                      <span>{selectedBond.exchange}</span>
+                    </div>
+                  )}
+                  {(selectedBond.floating_coupon || selectedBond.amortization || selectedBond.perpetual) && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Особенности</span>
+                      <span>
+                        {[
+                          selectedBond.floating_coupon && "Плавающий купон",
+                          selectedBond.amortization && "Амортизация",
+                          selectedBond.perpetual && "Бессрочная",
+                        ].filter(Boolean).join(", ")}
+                      </span>
                     </div>
                   )}
                   <div className="bond-info-row">
-                    <span className="bond-info-label">Страна</span>
-                    <span>{selectedBond.country_of_risk_name}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Сектор</span>
-                    <span>{selectedBond.sector}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Лот</span>
-                    <span>{selectedBond.lot}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Биржа</span>
-                    <span>{selectedBond.exchange}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Покупка</span>
-                    <span>{selectedBond.buy_available ? "✅ Доступна" : "❌ Недоступна"}</span>
-                  </div>
-                  <div className="bond-info-row">
-                    <span className="bond-info-label">Продажа</span>
-                    <span>{selectedBond.sell_available ? "✅ Доступна" : "❌ Недоступна"}</span>
+                    <span className="bond-info-label">Покупка / Продажа</span>
+                    <span>
+                      {selectedBond.buy_available ? "✅" : "❌"} / {selectedBond.sell_available ? "✅" : "❌"}
+                    </span>
                   </div>
                 </div>
                 <div className="modal-actions">
