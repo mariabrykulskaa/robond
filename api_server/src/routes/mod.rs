@@ -1,3 +1,4 @@
+pub mod bonds;
 pub mod cash;
 pub mod holdings;
 pub mod portfolio;
@@ -42,11 +43,14 @@ pub fn build_router(state: AppState) -> Router {
 
     let strategy_routes = Router::new().route("/", get(strategy::list_strategies));
 
+    let bond_routes = Router::new().route("/{isin}", get(bonds::get_bond_info));
+
     Router::new()
         .nest("/api/auth", auth_routes)
         .nest("/api/portfolios", portfolio_routes)
         .nest("/api/tinvest", tinvest_routes)
         .nest("/api/strategies", strategy_routes)
+        .nest("/api/bonds", bond_routes)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(state)
