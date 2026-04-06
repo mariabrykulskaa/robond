@@ -7,6 +7,7 @@ import {
   useCash,
   useSnapshots,
   useTotalReturn,
+  usePortfolioValue,
 } from "../hooks/usePortfolios";
 import * as tinvestApi from "../api/tinvest";
 import * as strategiesApi from "../api/strategies";
@@ -23,6 +24,7 @@ export default function PortfolioDetailPage() {
   const { data: cashData } = useCash(portfolioId);
   const { data: snapshots } = useSnapshots(portfolioId);
   const { data: returnData } = useTotalReturn(portfolioId);
+  const { data: valuation, isLoading: valuationLoading } = usePortfolioValue(portfolioId);
   const { data: tinvestStatus } = useQuery({
     queryKey: ["tinvest-status"],
     queryFn: tinvestApi.getStatus,
@@ -62,6 +64,7 @@ export default function PortfolioDetailPage() {
       const result = await tinvestApi.importPortfolio(portfolioId);
       queryClient.invalidateQueries({ queryKey: ["holdings", portfolioId] });
       queryClient.invalidateQueries({ queryKey: ["cash", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["portfolioValue", portfolioId] });
       alert(`Imported ${result.holdings_imported} holdings, cash: ${result.cash_rub} RUB`);
     } catch (e: any) {
       alert(e.response?.data?.error || "Import failed");
@@ -97,6 +100,7 @@ export default function PortfolioDetailPage() {
       setStrategyMessage(result.message);
       queryClient.invalidateQueries({ queryKey: ["holdings", portfolioId] });
       queryClient.invalidateQueries({ queryKey: ["cash", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["portfolioValue", portfolioId] });
     } catch (e: any) {
       setStrategyMessage(e.response?.data?.error || "Strategy execution failed");
     } finally {
@@ -112,14 +116,21 @@ export default function PortfolioDetailPage() {
 
       <div className="portfolio-header">
         <h2>{portfolio?.name}</h2>
-        {lastSnapshot && (
+        {valuation ? (
+          <div className="portfolio-value">
+            {Number(valuation.total_value).toLocaleString("ru-RU", {
+              style: "currency",
+              currency: "RUB",
+            })}
+          </div>
+        ) : lastSnapshot ? (
           <div className="portfolio-value">
             {Number(lastSnapshot.market_value).toLocaleString("ru-RU", {
               style: "currency",
               currency: "RUB",
             })}
           </div>
-        )}
+        ) : null}
         {totalReturn !== null && (
           <div className={`portfolio-return ${totalReturn >= 0 ? "positive" : "negative"}`}>
             {totalReturn >= 0 ? "+" : ""}
@@ -213,29 +224,55 @@ export default function PortfolioDetailPage() {
 
         <section className="detail-section">
           <h3>Holdings ({holdings?.length || 0})</h3>
+          {valuationLoading && <p className="meta">Загрузка цен...</p>}
           {holdings?.length === 0 && <p className="empty-state">No holdings</p>}
           <table className="holdings-table">
             <thead>
               <tr>
                 <th>ISIN</th>
-                <th>Quantity</th>
-                <th>Updated</th>
+                <th>Название</th>
+                <th>Кол-во</th>
+                <th>Цена</th>
+                <th>Стоимость</th>
               </tr>
             </thead>
             <tbody>
-              {holdings?.map((h) => (
-                <tr
-                  key={h.id}
-                  onClick={() => handleBondClick(h.isin)}
-                  style={{ cursor: "pointer" }}
-                  className="holdings-row-clickable"
-                >
-                  <td className="isin">{h.isin}</td>
-                  <td>{h.quantity}</td>
-                  <td className="meta">{new Date(h.updated_at).toLocaleDateString()}</td>
-                </tr>
-              ))}
+              {holdings?.map((h) => {
+                const hv = valuation?.holdings.find((v) => v.isin === h.isin);
+                return (
+                  <tr
+                    key={h.id}
+                    onClick={() => handleBondClick(h.isin)}
+                    style={{ cursor: "pointer" }}
+                    className="holdings-row-clickable"
+                  >
+                    <td className="isin">{h.isin}</td>
+                    <td>{hv?.name || "—"}</td>
+                    <td>{h.quantity}</td>
+                    <td>
+                      {hv?.price
+                        ? Number(hv.price).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })
+                        : "—"}
+                    </td>
+                    <td>
+                      {hv?.value
+                        ? Number(hv.value).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
+            {valuation && (
+              <tfoot>
+                <tr style={{ fontWeight: "bold" }}>
+                  <td colSpan={4} style={{ textAlign: "right" }}>Облигации:</td>
+                  <td>
+                    {Number(valuation.bonds_value).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </section>
 
