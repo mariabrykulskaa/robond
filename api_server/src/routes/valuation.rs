@@ -18,10 +18,10 @@ pub struct HoldingValue {
     pub isin: String,
     pub name: String,
     pub quantity: i64,
-    /// Price per one bond in RUB (None if unavailable)
-    pub price: Option<String>,
-    /// Total value = price * quantity (None if price unavailable)
-    pub value: Option<String>,
+    pub price: String,
+    pub value: String,
+    /// true if price is estimated (nominal + ACI) because market price is unavailable
+    pub estimated: bool,
 }
 
 #[derive(Serialize)]
@@ -72,8 +72,9 @@ pub async fn get_portfolio_value(
                     isin: h.isin.clone(),
                     name: h.isin.clone(),
                     quantity: h.quantity,
-                    price: None,
-                    value: None,
+                    price: "0".into(),
+                    value: "0".into(),
+                    estimated: true,
                 })
                 .collect();
             return Ok(Json(PortfolioValue {
@@ -189,27 +190,29 @@ pub async fn get_portfolio_value(
     let mut result_holdings = Vec::with_capacity(holdings.len());
 
     for h in &holdings {
-        let (name, price_rub, val) = if let Some(bm) = meta.get(&h.isin) {
-            let price_rub = ticker_points.get(&bm.ticker).map(|pts| {
-                *pts / Decimal::from(100) * bm.nominal + bm.aci_value
-            });
-
-            let val = price_rub.map(|p| p * Decimal::from(h.quantity));
-            if let Some(v) = val {
-                total_bonds += v;
+        let (name, price_rub, estimated) = if let Some(bm) = meta.get(&h.isin) {
+            if let Some(pts) = ticker_points.get(&bm.ticker) {
+                let price = *pts / Decimal::from(100) * bm.nominal + bm.aci_value;
+                (bm.name.clone(), price, false)
+            } else {
+                // No market price — fallback to nominal + ACI
+                let price = bm.nominal + bm.aci_value;
+                (bm.name.clone(), price, true)
             }
-
-            (bm.name.clone(), price_rub, val)
         } else {
-            (h.isin.clone(), None, None)
+            (h.isin.clone(), Decimal::ZERO, true)
         };
+
+        let val = price_rub * Decimal::from(h.quantity);
+        total_bonds += val;
 
         result_holdings.push(HoldingValue {
             isin: h.isin.clone(),
             name,
             quantity: h.quantity,
-            price: price_rub.map(|p| p.round_dp(2).to_string()),
-            value: val.map(|v| v.round_dp(2).to_string()),
+            price: price_rub.round_dp(2).to_string(),
+            value: val.round_dp(2).to_string(),
+            estimated,
         });
     }
 
