@@ -10,6 +10,8 @@ import {
 } from "../hooks/usePortfolios";
 import * as tinvestApi from "../api/tinvest";
 import * as strategiesApi from "../api/strategies";
+import * as bondsApi from "../api/bonds";
+import type { BondInfo } from "../api/bonds";
 
 export default function PortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +35,21 @@ export default function PortfolioDetailPage() {
   const [importing, setImporting] = useState(false);
   const [runningStrategy, setRunningStrategy] = useState(false);
   const [strategyMessage, setStrategyMessage] = useState("");
+  const [selectedBond, setSelectedBond] = useState<BondInfo | null>(null);
+  const [loadingBond, setLoadingBond] = useState(false);
+
+  const handleBondClick = async (isin: string) => {
+    setLoadingBond(true);
+    setSelectedBond(null);
+    try {
+      const info = await bondsApi.getBondInfo(isin);
+      setSelectedBond(info);
+    } catch {
+      alert("Не удалось загрузить информацию об облигации");
+    } finally {
+      setLoadingBond(false);
+    }
+  };
 
   if (isLoading) return <div className="loading">Loading...</div>;
 
@@ -207,7 +224,12 @@ export default function PortfolioDetailPage() {
             </thead>
             <tbody>
               {holdings?.map((h) => (
-                <tr key={h.id}>
+                <tr
+                  key={h.id}
+                  onClick={() => handleBondClick(h.isin)}
+                  style={{ cursor: "pointer" }}
+                  className="holdings-row-clickable"
+                >
                   <td className="isin">{h.isin}</td>
                   <td>{h.quantity}</td>
                   <td className="meta">{new Date(h.updated_at).toLocaleDateString()}</td>
@@ -246,6 +268,96 @@ export default function PortfolioDetailPage() {
           </section>
         )}
       </div>
+
+      {/* Bond Info Modal */}
+      {(selectedBond || loadingBond) && (
+        <div className="modal-overlay" onClick={() => { setSelectedBond(null); setLoadingBond(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            {loadingBond ? (
+              <p>Загрузка...</p>
+            ) : selectedBond && (
+              <>
+                <h3 style={{ marginBottom: 16 }}>{selectedBond.name}</h3>
+                <div className="bond-info-grid">
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Тикер</span>
+                    <span>{selectedBond.ticker}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">ISIN</span>
+                    <span>{selectedBond.isin}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">FIGI</span>
+                    <span>{selectedBond.figi}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Валюта</span>
+                    <span>{selectedBond.currency}</span>
+                  </div>
+                  {selectedBond.nominal && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Номинал</span>
+                      <span>{Number(selectedBond.nominal).toLocaleString("ru-RU")} {selectedBond.currency}</span>
+                    </div>
+                  )}
+                  {selectedBond.aci_value && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">НКД</span>
+                      <span>{Number(selectedBond.aci_value).toLocaleString("ru-RU")} {selectedBond.currency}</span>
+                    </div>
+                  )}
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Купонов в год</span>
+                    <span>{selectedBond.coupon_quantity_per_year}</span>
+                  </div>
+                  {selectedBond.maturity_date && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Дата погашения</span>
+                      <span>{selectedBond.maturity_date}</span>
+                    </div>
+                  )}
+                  {selectedBond.placement_date && (
+                    <div className="bond-info-row">
+                      <span className="bond-info-label">Дата размещения</span>
+                      <span>{selectedBond.placement_date}</span>
+                    </div>
+                  )}
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Страна</span>
+                    <span>{selectedBond.country_of_risk_name}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Сектор</span>
+                    <span>{selectedBond.sector}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Лот</span>
+                    <span>{selectedBond.lot}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Биржа</span>
+                    <span>{selectedBond.exchange}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Покупка</span>
+                    <span>{selectedBond.buy_available ? "✅ Доступна" : "❌ Недоступна"}</span>
+                  </div>
+                  <div className="bond-info-row">
+                    <span className="bond-info-label">Продажа</span>
+                    <span>{selectedBond.sell_available ? "✅ Доступна" : "❌ Недоступна"}</span>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button className="btn-primary" onClick={() => setSelectedBond(null)}>
+                    Закрыть
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
