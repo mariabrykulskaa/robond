@@ -66,7 +66,27 @@
 
 ### Подключение к базе данных
 
-**`MarketDataClient::from_env()`** - единственный способ подключения
+Три способа создания клиента:
+
+**1. Через `DbConfig` (рекомендуется в production)**
+
+```rust
+let config = DbConfig::from_env()?;
+let client = MarketDataClient::with_config(&config).await?;
+```
+
+**2. Shortcut из `.env`**
+
+```rust
+let client = MarketDataClient::from_env().await?;
+```
+
+**3. Из готового `PgPool` (для тестов и DI)**
+
+```rust
+let pool = PgPoolOptions::new().connect(&url).await?;
+let client = MarketDataClient::new(pool);
+```
 
 Читает учетные данные из `.env` файла:
 - `DB_HOST` - Хост базы данных
@@ -140,6 +160,28 @@
 - Параметры: нет
 - Возвращает: `Result<Vec<BondInfo>>` - только торгуемые облигации (`is_traded = true`)
 
+### Массовая загрузка данных (для бэктеста)
+
+**`get_all_candles_in_range(start_date: NaiveDate, end_date: NaiveDate)`**
+- Параметры: начальная дата, конечная дата
+- Возвращает: `Result<Vec<BondHistoryData>>` - все свечи всех облигаций за период (без full_information)
+
+**`get_all_bond_payments_in_range(start_date: NaiveDate, end_date: NaiveDate)`**
+- Параметры: начальная дата, конечная дата
+- Возвращает: `Result<Vec<BondPayment>>` - все выплаты (купоны, амортизации, погашения) за период
+
+**`get_all_bond_coupons()`**
+- Параметры: нет
+- Возвращает: `Result<HashMap<i64, BondCoupon>>` - купоны всех облигаций (bond_id -> BondCoupon)
+
+**`get_bond_offer_dates()`**
+- Параметры: нет
+- Возвращает: `Result<HashMap<i64, NaiveDate>>` - самая ранняя дата оферты для каждой облигации
+
+**`get_bond_default_dates()`**
+- Параметры: нет
+- Возвращает: `Result<HashMap<i64, NaiveDate>>` - дата первого дефолта для каждой облигации
+
 
 ## Зависимости
 
@@ -147,5 +189,5 @@
 - `tokio` - асинхронный runtime
 - `chrono` - работа с датами
 - `serde` - сериализация/десериализация
-- `anyhow` - обработка ошибок
+- `thiserror` - типизированные ошибки
 - `dotenvy` - загрузка переменных окружения из .env файла
