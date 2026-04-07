@@ -23,7 +23,10 @@ pub async fn get(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
 ) -> Result<Json<CashResponse>, AppError> {
-    state.portfolio_client.get_portfolio_for_user(user_id, portfolio_id).await?;
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
     let amount = state.portfolio_client.get_cash(portfolio_id).await?;
     Ok(Json(CashResponse { amount }))
 }
@@ -34,7 +37,13 @@ pub async fn set(
     Path(portfolio_id): Path<i64>,
     Json(req): Json<SetCashRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    state.portfolio_client.get_portfolio_for_user(user_id, portfolio_id).await?;
-    let cash = state.portfolio_client.set_cash(portfolio_id, req.amount, &req.currency).await?;
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
+    let cash = state
+        .portfolio_client
+        .set_cash(portfolio_id, req.amount, &req.currency)
+        .await?;
     Ok(Json(serde_json::to_value(cash).unwrap()))
 }

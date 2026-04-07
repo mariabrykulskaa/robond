@@ -65,18 +65,22 @@ impl PortfolioClient {
 
     /// Получить портфель по id.
     pub async fn get_portfolio(&self, portfolio_id: i64) -> Result<Portfolio> {
-        sqlx::query_as::<_, Portfolio>("SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio WHERE id = $1")
-            .bind(portfolio_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or(Error::PortfolioNotFound(portfolio_id))
+        sqlx::query_as::<_, Portfolio>(
+            "SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio WHERE id = $1",
+        )
+        .bind(portfolio_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(Error::PortfolioNotFound(portfolio_id))
     }
 
     /// Список всех портфелей.
     pub async fn list_portfolios(&self) -> Result<Vec<Portfolio>> {
-        let rows = sqlx::query_as::<_, Portfolio>("SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio ORDER BY created_at")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, Portfolio>(
+            "SELECT id, name, user_id, strategy_name, strategy_running, created_at FROM portfolio ORDER BY created_at",
+        )
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 

@@ -6,6 +6,7 @@ pub struct User {
     pub id: i64,
     pub email: String,
     pub password_hash: String,
+    #[allow(dead_code)]
     pub created_at: DateTime<Utc>,
 }
 

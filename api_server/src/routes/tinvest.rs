@@ -149,16 +149,14 @@ pub async fn connect(
         _ => "sandbox",
     };
 
-    sqlx::query(
-        "UPDATE app_user SET tinvest_token = $2, tinvest_account_id = $3, tinvest_endpoint = $4 WHERE id = $1",
-    )
-    .bind(user_id)
-    .bind(&req.token)
-    .bind(&req.account_id)
-    .bind(endpoint)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    sqlx::query("UPDATE app_user SET tinvest_token = $2, tinvest_account_id = $3, tinvest_endpoint = $4 WHERE id = $1")
+        .bind(user_id)
+        .bind(&req.token)
+        .bind(&req.account_id)
+        .bind(endpoint)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(TInvestStatus {
         connected: true,
@@ -171,13 +169,12 @@ pub async fn status(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<TInvestStatus>, AppError> {
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let row: Option<(Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
 
     match row {
         Some((Some(_token), Some(account_id), endpoint)) => Ok(Json(TInvestStatus {
@@ -222,13 +219,12 @@ pub async fn import_portfolio(
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
 
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let row: Option<(Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let (token, account_id, endpoint) = match row {
         Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".to_string())),
@@ -249,19 +245,13 @@ pub async fn import_portfolio(
     let mut holdings_imported = 0;
     for (isin, &quantity) in &tinvest_portfolio.bonds_count {
         if quantity > 0 {
-            state
-                .portfolio_client
-                .set_holding(portfolio_id, isin, quantity)
-                .await?;
+            state.portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
             holdings_imported += 1;
         }
     }
 
     let cash = tinvest_portfolio.free_money;
-    state
-        .portfolio_client
-        .set_cash(portfolio_id, cash, "RUB")
-        .await?;
+    state.portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
 
     Ok(Json(ImportResult {
         holdings_imported,

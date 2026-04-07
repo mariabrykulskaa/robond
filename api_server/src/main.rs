@@ -1,3 +1,5 @@
+//! REST API сервер для управления портфелями облигаций.
+
 mod auth;
 mod config;
 mod error;

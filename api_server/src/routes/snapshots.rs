@@ -17,7 +17,10 @@ pub async fn list(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    state.portfolio_client.get_portfolio_for_user(user_id, portfolio_id).await?;
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
     let snapshots = state.portfolio_client.get_snapshots(portfolio_id).await?;
     Ok(Json(serde_json::to_value(snapshots).unwrap()))
 }
@@ -27,7 +30,10 @@ pub async fn total_return(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
 ) -> Result<Json<TotalReturnResponse>, AppError> {
-    state.portfolio_client.get_portfolio_for_user(user_id, portfolio_id).await?;
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
     let ret = state.portfolio_client.compute_total_return(portfolio_id).await?;
     Ok(Json(TotalReturnResponse { total_return: ret }))
 }

@@ -27,7 +27,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/{id}/cash", get(cash::get).put(cash::set))
         .route("/{id}/snapshots", get(snapshots::list))
         .route("/{id}/return", get(snapshots::total_return))
-        .route("/{id}/strategy", put(strategy::set_strategy).delete(strategy::clear_strategy))
+        .route(
+            "/{id}/strategy",
+            put(strategy::set_strategy).delete(strategy::clear_strategy),
+        )
         .route("/{id}/strategy/run", post(strategy::run_strategy));
 
     let tinvest_routes = Router::new()
@@ -37,8 +40,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/disconnect", delete(tinvest::disconnect))
         .route("/import/{portfolio_id}", post(tinvest::import_portfolio));
 
-    let strategy_routes = Router::new()
-        .route("/", get(strategy::list_strategies));
+    let strategy_routes = Router::new().route("/", get(strategy::list_strategies));
 
     Router::new()
         .nest("/api/auth", auth_routes)
