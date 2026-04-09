@@ -30,17 +30,18 @@ export async function fetchAccounts(
   return data;
 }
 
-export async function getStatus(): Promise<TInvestStatus> {
-  const { data } = await api.get<TInvestStatus>("/tinvest/status");
+export async function getStatus(portfolioId: number): Promise<TInvestStatus> {
+  const { data } = await api.get<TInvestStatus>(`/portfolios/${portfolioId}/tinvest-status`);
   return data;
 }
 
 export async function connect(
+  portfolioId: number,
   token: string,
   accountId: string,
   endpoint: string
 ): Promise<TInvestStatus> {
-  const { data } = await api.post<TInvestStatus>("/tinvest/connect", {
+  const { data } = await api.post<TInvestStatus>(`/portfolios/${portfolioId}/connect`, {
     token,
     account_id: accountId,
     endpoint,
@@ -48,12 +49,12 @@ export async function connect(
   return data;
 }
 
-export async function disconnect(): Promise<TInvestStatus> {
-  const { data } = await api.delete<TInvestStatus>("/tinvest/disconnect");
+export async function disconnect(portfolioId: number): Promise<TInvestStatus> {
+  const { data } = await api.delete<TInvestStatus>(`/portfolios/${portfolioId}/disconnect`);
   return data;
 }
 
 export async function importPortfolio(portfolioId: number): Promise<ImportResult> {
-  const { data } = await api.post<ImportResult>(`/tinvest/import/${portfolioId}`);
+  const { data } = await api.post<ImportResult>(`/portfolios/${portfolioId}/import`);
   return data;
 }

@@ -1,6 +1,6 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
@@ -10,6 +10,11 @@ use t_invest_api_rust::proto::{
     FindInstrumentRequest, GetBondCouponsRequest, InstrumentIdType, InstrumentRequest,
     InstrumentType,
 };
+
+#[derive(Deserialize)]
+pub struct BondInfoQuery {
+    pub portfolio_id: i64,
+}
 
 fn none_if_empty(s: &str) -> Option<String> {
     let s = s.trim();
@@ -71,19 +76,11 @@ pub async fn get_bond_info(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
     Path(isin): Path<String>,
+    Query(query): Query<BondInfoQuery>,
 ) -> Result<Json<BondInfo>, AppError> {
-    // Get user's T-Invest token
-    let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let (token, _account_id, endpoint) = match row {
-        Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".to_string())),
-        _ => return Err(AppError::BadRequest("T-Invest not connected".into())),
-    };
+    // Get T-Invest token from portfolio
+    let (token, _account_id, endpoint) =
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, query.portfolio_id).await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
