@@ -22,7 +22,9 @@ export interface BondInfo {
   sell_available: boolean;
 }
 
-export async function getBondInfo(isin: string): Promise<BondInfo> {
-  const { data } = await api.get<BondInfo>(`/bonds/${isin}`);
+export async function getBondInfo(isin: string, portfolioId: number): Promise<BondInfo> {
+  const { data } = await api.get<BondInfo>(`/bonds/${isin}`, {
+    params: { portfolio_id: portfolioId },
+  });
   return data;
 }

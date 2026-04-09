@@ -40,6 +40,28 @@ pub struct ImportResult {
     pub cash_rub: String,
 }
 
+/// Helper: get T-Invest credentials from a portfolio row.
+pub async fn get_portfolio_tinvest(
+    pool: &sqlx::PgPool,
+    user_id: i64,
+    portfolio_id: i64,
+) -> Result<(String, String, String), AppError> {
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM portfolio WHERE id = $1 AND user_id = $2",
+    )
+    .bind(portfolio_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    match row {
+        Some((Some(t), Some(a), e)) => Ok((t, a, e.unwrap_or_else(|| "sandbox".to_string()))),
+        Some(_) => Err(AppError::BadRequest("T-Invest not connected for this portfolio".into())),
+        None => Err(AppError::NotFound),
+    }
+}
+
 /// Fetch available accounts for a given token (no saving yet).
 pub async fn fetch_accounts(
     AuthUser(_user_id): AuthUser,
@@ -141,21 +163,30 @@ pub async fn fetch_accounts(
 pub async fn connect(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
+    Path(portfolio_id): Path<i64>,
     Json(req): Json<ConnectRequest>,
 ) -> Result<Json<TInvestStatus>, AppError> {
     if req.token.is_empty() || req.account_id.is_empty() {
         return Err(AppError::BadRequest("token and account_id are required".into()));
     }
+
+    // Verify portfolio ownership
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
+
     let endpoint = match req.endpoint.as_str() {
         "production" => "production",
         _ => "sandbox",
     };
 
-    sqlx::query("UPDATE app_user SET tinvest_token = $2, tinvest_account_id = $3, tinvest_endpoint = $4 WHERE id = $1")
-        .bind(user_id)
+    sqlx::query("UPDATE portfolio SET tinvest_token = $2, tinvest_account_id = $3, tinvest_endpoint = $4 WHERE id = $1 AND user_id = $5")
+        .bind(portfolio_id)
         .bind(&req.token)
         .bind(&req.account_id)
         .bind(endpoint)
+        .bind(user_id)
         .execute(&state.pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -170,9 +201,11 @@ pub async fn connect(
 pub async fn status(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
+    Path(portfolio_id): Path<i64>,
 ) -> Result<Json<TInvestStatus>, AppError> {
     let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
+        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM portfolio WHERE id = $1 AND user_id = $2")
+            .bind(portfolio_id)
             .bind(user_id)
             .fetch_optional(&state.pool)
             .await
@@ -195,10 +228,17 @@ pub async fn status(
 pub async fn disconnect(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
+    Path(portfolio_id): Path<i64>,
 ) -> Result<Json<TInvestStatus>, AppError> {
+    state
+        .portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
+
     sqlx::query(
-        "UPDATE app_user SET tinvest_token = NULL, tinvest_account_id = NULL, tinvest_endpoint = 'sandbox' WHERE id = $1",
+        "UPDATE portfolio SET tinvest_token = NULL, tinvest_account_id = NULL, tinvest_endpoint = 'sandbox' WHERE id = $1 AND user_id = $2",
     )
+    .bind(portfolio_id)
     .bind(user_id)
     .execute(&state.pool)
     .await
@@ -221,17 +261,8 @@ pub async fn import_portfolio(
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
 
-    let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let (token, account_id, endpoint) = match row {
-        Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".to_string())),
-        _ => return Err(AppError::BadRequest("T-Invest not connected".into())),
-    };
+    let (token, account_id, endpoint) =
+        get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,

@@ -101,18 +101,9 @@ pub async fn run_strategy(
         .strategy_name
         .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
 
-    // Get T-Invest credentials
-    let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let (token, account_id, endpoint) = match row {
-        Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".to_string())),
-        _ => return Err(AppError::BadRequest("T-Invest not connected".into())),
-    };
+    // Get T-Invest credentials from portfolio
+    let (token, account_id, endpoint) =
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
 
     // Connect to T-Invest
     let ep = match endpoint.as_str() {

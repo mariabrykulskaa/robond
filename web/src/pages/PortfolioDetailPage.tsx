@@ -10,6 +10,7 @@ import {
   usePortfolioValue,
 } from "../hooks/usePortfolios";
 import * as tinvestApi from "../api/tinvest";
+import type { AccountInfo } from "../api/tinvest";
 import * as strategiesApi from "../api/strategies";
 import * as bondsApi from "../api/bonds";
 import type { BondInfo } from "../api/bonds";
@@ -26,8 +27,8 @@ export default function PortfolioDetailPage() {
   const { data: returnData } = useTotalReturn(portfolioId);
   const { data: valuation, isLoading: valuationLoading } = usePortfolioValue(portfolioId);
   const { data: tinvestStatus } = useQuery({
-    queryKey: ["tinvest-status"],
-    queryFn: tinvestApi.getStatus,
+    queryKey: ["tinvest-status", portfolioId],
+    queryFn: () => tinvestApi.getStatus(portfolioId),
   });
   const { data: strategies } = useQuery({
     queryKey: ["strategies"],
@@ -40,11 +41,66 @@ export default function PortfolioDetailPage() {
   const [selectedBond, setSelectedBond] = useState<BondInfo | null>(null);
   const [loadingBond, setLoadingBond] = useState(false);
 
+  // T-Invest connection state
+  const [token, setToken] = useState("");
+  const [endpoint, setEndpoint] = useState("sandbox");
+  const [sandboxAmount, setSandboxAmount] = useState("1000000");
+  const [fetchingAccounts, setFetchingAccounts] = useState(false);
+  const [connectError, setConnectError] = useState("");
+  const [accounts, setAccounts] = useState<AccountInfo[] | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
+  const handleFetchAccounts = async () => {
+    if (!token) {
+      setConnectError("Token is required");
+      return;
+    }
+    setFetchingAccounts(true);
+    setConnectError("");
+    setAccounts(null);
+    try {
+      const result = await tinvestApi.fetchAccounts(
+        token,
+        endpoint,
+        endpoint === "sandbox" ? Number(sandboxAmount) || 1000000 : undefined
+      );
+      if (result.length === 0) {
+        setConnectError("No accounts found for this token");
+      } else {
+        setAccounts(result);
+      }
+    } catch (e: any) {
+      setConnectError(e.response?.data?.error || "Failed to fetch accounts. Check token and endpoint.");
+    } finally {
+      setFetchingAccounts(false);
+    }
+  };
+
+  const handleSelectAccount = async (accountId: string) => {
+    setConnecting(true);
+    setConnectError("");
+    try {
+      await tinvestApi.connect(portfolioId, token, accountId, endpoint);
+      queryClient.invalidateQueries({ queryKey: ["tinvest-status", portfolioId] });
+      setToken("");
+      setAccounts(null);
+    } catch (e: any) {
+      setConnectError(e.response?.data?.error || "Connection failed");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await tinvestApi.disconnect(portfolioId);
+    queryClient.invalidateQueries({ queryKey: ["tinvest-status", portfolioId] });
+  };
+
   const handleBondClick = async (isin: string) => {
     setLoadingBond(true);
     setSelectedBond(null);
     try {
-      const info = await bondsApi.getBondInfo(isin);
+      const info = await bondsApi.getBondInfo(isin, portfolioId);
       setSelectedBond(info);
     } catch {
       alert("Не удалось загрузить информацию об облигации");
@@ -141,24 +197,142 @@ export default function PortfolioDetailPage() {
 
       {/* T-Invest Import */}
       <section className="detail-section" style={{ marginBottom: 16 }}>
-        <h3>T-Bank Import</h3>
+        <h3>T-Bank Connection</h3>
         {tinvestStatus?.connected ? (
           <div>
             <p style={{ marginBottom: 8 }}>
               Connected: <strong>{tinvestStatus.account_id}</strong> ({tinvestStatus.endpoint})
             </p>
-            <button
-              className="btn-primary"
-              onClick={handleImport}
-              disabled={importing}
-            >
-              {importing ? "Importing..." : "Import from T-Bank"}
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn-primary"
+                onClick={handleImport}
+                disabled={importing}
+              >
+                {importing ? "Importing..." : "Import from T-Bank"}
+              </button>
+              <button
+                onClick={handleDisconnect}
+                style={{
+                  color: "#f44336",
+                  border: "1px solid #f44336",
+                  background: "transparent",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
           </div>
         ) : (
-          <p>
-            T-Bank not connected. <Link to="/settings">Connect in Settings</Link>
-          </p>
+          <div>
+            {connectError && (
+              <div className="error-msg" style={{ marginBottom: 12 }}>
+                {connectError}
+              </div>
+            )}
+
+            {!accounts ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400 }}>
+                <p style={{ color: "#888", marginBottom: 4 }}>
+                  Enter your T-Invest API token for this portfolio
+                </p>
+                <input
+                  type="password"
+                  placeholder="T-Invest Token (t.xxx...)"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid #ddd",
+                    borderRadius: 8,
+                    fontSize: 14,
+                  }}
+                />
+                <select
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid #ddd",
+                    borderRadius: 8,
+                    fontSize: 14,
+                  }}
+                >
+                  <option value="sandbox">Sandbox</option>
+                  <option value="production">Production</option>
+                </select>
+                {endpoint === "sandbox" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="number"
+                      placeholder="Сумма (₽)"
+                      value={sandboxAmount}
+                      onChange={(e) => setSandboxAmount(e.target.value)}
+                      min={1000}
+                      step={1000}
+                      style={{
+                        padding: "10px 12px",
+                        border: "1px solid #ddd",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        flex: 1,
+                      }}
+                    />
+                    <span style={{ color: "#888", fontSize: 13, whiteSpace: "nowrap" }}>₽ на виртуальный счёт</span>
+                  </div>
+                )}
+                <button
+                  className="btn-primary"
+                  onClick={handleFetchAccounts}
+                  disabled={fetchingAccounts}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  {fetchingAccounts ? "Fetching accounts..." : "Get Accounts"}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p style={{ color: "#888", marginBottom: 8 }}>
+                  Select an account:
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400 }}>
+                  {accounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      className="strategy-card"
+                      onClick={() => handleSelectAccount(acc.id)}
+                      disabled={connecting}
+                      style={{ width: "100%" }}
+                    >
+                      <strong>{acc.name}</strong>
+                      <span className="meta">
+                        {acc.account_type} &middot; ID: {acc.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => {
+                    setAccounts(null);
+                    setConnectError("");
+                  }}
+                  style={{
+                    marginTop: 12,
+                    background: "transparent",
+                    border: "1px solid #ddd",
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  Back
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </section>
 

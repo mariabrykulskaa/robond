@@ -44,6 +44,7 @@ impl PortfolioClient {
             include_str!("../migrations/002_create_users_table.sql"),
             include_str!("../migrations/003_add_user_id_to_portfolio.sql"),
             include_str!("../migrations/004_add_tinvest_and_strategy.sql"),
+            include_str!("../migrations/005_move_tinvest_to_portfolio.sql"),
         ];
         for sql in migrations {
             sqlx::raw_sql(sql).execute(&self.pool).await?;

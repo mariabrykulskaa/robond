@@ -54,17 +54,12 @@ pub async fn get_portfolio_value(
         }));
     }
 
-    // Get user's T-Invest token
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM app_user WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.pool)
-    .await?;
+    // Get T-Invest token from portfolio
+    let tinvest = super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await;
 
-    let (token, _account_id, endpoint) = match row {
-        Some((Some(t), Some(a), e)) => (t, a, e.unwrap_or_else(|| "sandbox".into())),
-        _ => {
+    let (token, _account_id, endpoint) = match tinvest {
+        Ok(creds) => creds,
+        Err(_) => {
             // No T-Invest — return holdings without prices
             let hv: Vec<HoldingValue> = holdings
                 .iter()
