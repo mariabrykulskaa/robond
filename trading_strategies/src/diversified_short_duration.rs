@@ -46,7 +46,7 @@ impl Default for DiversifiedShortDurationStrategy {
             max_weight: 0.15,
             min_days_to_maturity: 90,
             max_days_to_maturity: 540,
-            min_price_pct: 50.0,
+            min_price_pct: 75.0,
             stop_loss_pct: 70.0,
             min_yield: 0.05,
         }
@@ -176,7 +176,7 @@ impl Strategy for DiversifiedShortDurationStrategy {
             };
 
             // Фильтр по цене: не берём мусор и не берём сильно выше номинала.
-            if price_pct < self.min_price_pct || price_pct > 105.0 {
+            if price_pct < self.min_price_pct || price_pct > 120.0 {
                 continue;
             }
 
