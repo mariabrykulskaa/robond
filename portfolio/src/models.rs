@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub struct Portfolio {
     pub id: i64,
     pub name: String,
+    pub user_id: Option<i64>,
+    pub strategy_name: Option<String>,
+    pub strategy_running: Option<bool>,
     pub created_at: DateTime<Utc>,
 }
 
