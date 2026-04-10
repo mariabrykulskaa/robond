@@ -19,7 +19,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const url = originalRequest?.url || "";
+    const isAuthEndpoint = url.includes("/auth/");
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem("refresh_token");
@@ -39,7 +42,7 @@ api.interceptors.response.use(
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("user_data");
-        window.location.href = "/login";
+        window.location.href = "/robond/login";
         return Promise.reject(error);
       }
     }
