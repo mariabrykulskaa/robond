@@ -59,7 +59,34 @@ body {
   border-color: #1a1a2e;
 }
 
-.auth-card button {
+.password-field {
+  position: relative;
+  display: flex;
+}
+
+.password-field input {
+  flex: 1;
+  padding-right: 60px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.toggle-password:hover {
+  color: #1a1a2e;
+}
+
+.auth-card button[type="submit"] {
   padding: 12px;
   background: #1a1a2e;
   color: #fff;
