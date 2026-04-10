@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "TRUNCATE TABLE coupons",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d4606a1ab113576b5ff8aca7ad2a87c37238b7fb2cb57b8ebd6828fccbe8549f"
+}

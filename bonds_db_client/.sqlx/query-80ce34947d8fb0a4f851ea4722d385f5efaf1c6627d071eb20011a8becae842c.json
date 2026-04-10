@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bond FROM bonds ORDER BY instrument_uid",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bond",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80ce34947d8fb0a4f851ea4722d385f5efaf1c6627d071eb20011a8becae842c"
+}

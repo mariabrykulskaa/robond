@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO events (instrument_uid, events)\n            SELECT * FROM UNNEST($1::uuid[], $2::bytea[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e45ec5bdb01cff35c30f82ad5dcd2658883275ac883940d37a607d0f10f95c3"
+}
