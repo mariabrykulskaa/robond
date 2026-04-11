@@ -184,6 +184,18 @@ pub async fn connect(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    // Clear old holdings and cash when switching to a new account
+    sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    sqlx::query("DELETE FROM portfolio_cash WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
     Ok(Json(TInvestStatus {
         connected: true,
         account_id: Some(req.account_id),
