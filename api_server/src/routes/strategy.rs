@@ -51,7 +51,7 @@ pub async fn set_strategy(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
     Json(req): Json<SetStrategyRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<RunResult>, AppError> {
     if !VALID_STRATEGIES.contains(&req.strategy_name.as_str()) {
         return Err(AppError::BadRequest(format!(
             "unknown strategy '{}'. Valid: {:?}",
@@ -64,12 +64,106 @@ pub async fn set_strategy(
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
 
-    let portfolio = state
+    // Get T-Invest credentials
+    let (token, account_id, endpoint) =
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+
+    let ep = match endpoint.as_str() {
+        "production" => t_invest_api_rust::EndPoint::Prod,
+        _ => t_invest_api_rust::EndPoint::Sandbox,
+    };
+
+    let mut client = t_invest_api_rust::Client::try_new(token, ep)
+        .await
+        .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
+
+    // Step 1: sell all current holdings
+    let current = live_engine::get_portfolio(&mut client, &account_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
+
+    let ticker_to_info = live_engine::get_ticker_to_info(&mut client).await;
+
+    let mut sell_orders = Vec::new();
+    for (ticker, &count) in &current.bonds_count {
+        if count > 0 {
+            sell_orders.push(trading_strategies::MarketOrder {
+                isin: ticker.clone(),
+                order_type: trading_strategies::MarketOrderType::Sell,
+                count,
+            });
+        }
+    }
+
+    if !sell_orders.is_empty() {
+        live_engine::make_orders(&mut client, &sell_orders, &ticker_to_info, &account_id).await;
+        // Small delay for orders to settle
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    // Step 2: save new strategy
+    state
         .portfolio_client
         .set_strategy(portfolio_id, &req.strategy_name)
         .await?;
 
-    Ok(Json(serde_json::to_value(portfolio).unwrap()))
+    // Step 3: run new strategy (it will buy based on fresh portfolio state)
+    // Re-fetch portfolio after sells
+    let mut client2 = t_invest_api_rust::Client::try_new(
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id)
+            .await?
+            .0,
+        ep,
+    )
+    .await
+    .map_err(|e| AppError::Internal(format!("T-Invest reconnection failed: {e}")))?;
+
+    match req.strategy_name.as_str() {
+        "diversified_short_duration" => {
+            let strat = trading_strategies::diversified_short_duration::DiversifiedShortDurationStrategy::default();
+            live_engine::run(&account_id, &mut client2, strat).await;
+        }
+        "high_yield_short" => {
+            let strat = trading_strategies::high_yield_short::HighYieldShortStrategy::default();
+            live_engine::run(&account_id, &mut client2, strat).await;
+        }
+        "yield_maximizer" => {
+            let strat = trading_strategies::yield_maximizer::YieldMaximizerStrategy::default();
+            live_engine::run(&account_id, &mut client2, strat).await;
+        }
+        _ => return Err(AppError::BadRequest("unknown strategy".into())),
+    }
+
+    // Step 4: sync portfolio from T-Invest
+    let tinvest_portfolio = live_engine::get_portfolio(&mut client2, &account_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
+
+    // Clear old holdings from DB before importing
+    sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let mut holdings_imported = 0;
+    for (isin, &quantity) in &tinvest_portfolio.bonds_count {
+        if quantity > 0 {
+            state.portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
+            holdings_imported += 1;
+        }
+    }
+
+    let cash = tinvest_portfolio.free_money;
+    state.portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
+
+    Ok(Json(RunResult {
+        orders_count: holdings_imported,
+        message: format!(
+            "Sold all positions, switched to '{}'. Bought {} new holdings, cash: {} RUB",
+            req.strategy_name, holdings_imported, cash
+        ),
+    }))
 }
 
 pub async fn clear_strategy(
