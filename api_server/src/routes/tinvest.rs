@@ -83,49 +83,39 @@ pub async fn fetch_accounts(
     let is_sandbox = matches!(ep, t_invest_api_rust::EndPoint::Sandbox);
 
     let response = if is_sandbox {
-        let mut resp = client
+        // Always create a fresh sandbox account for each portfolio
+        let new_acc = client
+            .sandbox
+            .open_sandbox_account(t_invest_api_rust::proto::OpenSandboxAccountRequest {
+                name: Some("Sandbox".to_string()),
+            })
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to create sandbox account: {e}")))?
+            .into_inner();
+
+        // Top up the new sandbox account
+        let amount = req.initial_amount.unwrap_or(1_000_000);
+        client
+            .sandbox
+            .sandbox_pay_in(t_invest_api_rust::proto::SandboxPayInRequest {
+                account_id: new_acc.account_id.clone(),
+                amount: Some(t_invest_api_rust::proto::MoneyValue {
+                    currency: "RUB".to_string(),
+                    units: amount,
+                    nano: 0,
+                }),
+            })
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to top up sandbox: {e}")))?;
+
+        tracing::info!("Created sandbox account {} with {} RUB", new_acc.account_id, amount);
+
+        client
             .sandbox
             .get_sandbox_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
             .await
             .map_err(|e| AppError::Internal(format!("Failed to get sandbox accounts: {e}")))?
-            .into_inner();
-
-        // Auto-create sandbox account if none exist
-        if resp.accounts.is_empty() {
-            let new_acc = client
-                .sandbox
-                .open_sandbox_account(t_invest_api_rust::proto::OpenSandboxAccountRequest {
-                    name: Some("Sandbox".to_string()),
-                })
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to create sandbox account: {e}")))?
-                .into_inner();
-
-            // Top up sandbox account
-            let amount = req.initial_amount.unwrap_or(1_000_000);
-            client
-                .sandbox
-                .sandbox_pay_in(t_invest_api_rust::proto::SandboxPayInRequest {
-                    account_id: new_acc.account_id.clone(),
-                    amount: Some(t_invest_api_rust::proto::MoneyValue {
-                        currency: "RUB".to_string(),
-                        units: amount,
-                        nano: 0,
-                    }),
-                })
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to top up sandbox: {e}")))?;
-
-            tracing::info!("Auto-created sandbox account {} with {} RUB", new_acc.account_id, amount);
-
-            resp = client
-                .sandbox
-                .get_sandbox_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to get sandbox accounts: {e}")))?
-                .into_inner();
-        }
-        resp
+            .into_inner()
     } else {
         client
             .users
