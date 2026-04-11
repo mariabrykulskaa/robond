@@ -82,7 +82,7 @@ pub async fn fetch_accounts(
 
     let is_sandbox = matches!(ep, t_invest_api_rust::EndPoint::Sandbox);
 
-    let response = if is_sandbox {
+    if is_sandbox {
         // Always create a fresh sandbox account for each portfolio
         let new_acc = client
             .sandbox
@@ -110,20 +110,23 @@ pub async fn fetch_accounts(
 
         tracing::info!("Created sandbox account {} with {} RUB", new_acc.account_id, amount);
 
-        client
-            .sandbox
-            .get_sandbox_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to get sandbox accounts: {e}")))?
-            .into_inner()
-    } else {
-        client
-            .users
-            .get_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to get accounts: {e}")))?
-            .into_inner()
-    };
+        // Return only the newly created account
+        return Ok(Json(vec![AccountInfo {
+            id: new_acc.account_id,
+            name: format!("Новый sandbox-счёт ({} ₽)", amount.to_string().as_str()
+                .chars().rev().enumerate()
+                .flat_map(|(i, c)| { if i > 0 && i % 3 == 0 { vec![' ', c] } else { vec![c] } })
+                .collect::<Vec<_>>().into_iter().rev().collect::<String>()),
+            account_type: "Sandbox".to_string(),
+        }]));
+    }
+
+    let response = client
+        .users
+        .get_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get accounts: {e}")))?
+        .into_inner();
 
     let accounts = response
         .accounts
