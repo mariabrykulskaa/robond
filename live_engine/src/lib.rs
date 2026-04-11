@@ -116,9 +116,12 @@ pub fn get_price(points: Quotation, bond_info: &Bond) -> Option<Decimal> {
 }
 
 pub async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bond>) -> HashMap<String, Decimal> {
+    // Build figi → ticker mapping and use figi as instrument_id
+    let mut figi_to_ticker = HashMap::<String, String>::new();
     let mut ids = Vec::<String>::new();
     for (ticker, bond_info) in ticker_to_info {
-        ids.push(format!("{}_{}", ticker, bond_info.class_code));
+        figi_to_ticker.insert(bond_info.figi.clone(), ticker.clone());
+        ids.push(bond_info.figi.clone());
     }
     ids.sort();
 
@@ -130,19 +133,24 @@ pub async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bo
     request.set_instrument_status(InstrumentStatus::Base);
     let response = client.market_data.get_last_prices(request).await.unwrap().into_inner();
     let last_prices = response.last_prices;
-    assert_eq!(last_prices.len(), ticker_to_info.len());
 
     let mut prices = HashMap::<String, Decimal>::new();
     for last_price in last_prices {
-        match last_price.price {
-            None => {}
-            Some(points) => match get_price(points, ticker_to_info.get(&last_price.ticker).unwrap()) {
-                None => {}
-                Some(price) => {
-                    let opt = prices.insert(last_price.ticker, price);
-                    assert_eq!(opt, None);
+        // Resolve ticker from figi
+        let ticker = if !last_price.ticker.is_empty() {
+            last_price.ticker.clone()
+        } else if let Some(t) = figi_to_ticker.get(&last_price.figi) {
+            t.clone()
+        } else {
+            continue;
+        };
+
+        if let Some(bond_info) = ticker_to_info.get(&ticker) {
+            if let Some(points) = last_price.price {
+                if let Some(price) = get_price(points, bond_info) {
+                    prices.insert(ticker, price);
                 }
-            },
+            }
         }
     }
 
@@ -159,7 +167,7 @@ pub async fn make_order(
     let mut request = PostOrderRequest {
         quantity: order.count,
         account_id: account_id.to_string(),
-        instrument_id: format!("{}_{}", bond_info.ticker, bond_info.class_code),
+        instrument_id: bond_info.figi.clone(),
         ..PostOrderRequest::default()
     };
     request.set_direction(match order.order_type {
