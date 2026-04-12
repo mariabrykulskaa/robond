@@ -356,6 +356,11 @@ export default function PortfolioDetailPage() {
               <strong>{currentStrategy.name}</strong>
               <p className="meta">{currentStrategy.description}</p>
             </div>
+            {portfolio?.pending_strategy_run && (
+              <p style={{ marginTop: 8, color: "#f59e0b", fontWeight: 500 }}>
+                ⏰ Стратегия будет применена при открытии биржи (Пн–Пт, 10:00 МСК)
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button
                 className="btn-primary"
