@@ -68,18 +68,9 @@ fn print_result(name: &str, result: &backtest_engine::BacktestResult) {
         .sum();
 
     println!("┌─── {} ───", name);
-    println!(
-        "│ Финальная стоимость:  {:>12.2} руб",
-        result.final_value
-    );
-    println!(
-        "│ Прибыль:              {:>12.2} руб",
-        result.profit_loss
-    );
-    println!(
-        "│ Доходность за период: {:>12.2}%",
-        result.return_percent
-    );
+    println!("│ Финальная стоимость:  {:>12.2} руб", result.final_value);
+    println!("│ Прибыль:              {:>12.2} руб", result.profit_loss);
+    println!("│ Доходность за период: {:>12.2}%", result.return_percent);
     println!("│ Годовая доходность:   {:>12.2}%", annual_ret);
     println!("│ Sharpe Ratio (rf=18%):{:>12.4}", sharpe);
     println!("│ Макс. просадка:       {:>12.2}%", max_dd);
