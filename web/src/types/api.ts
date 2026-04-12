@@ -4,6 +4,7 @@ export interface Portfolio {
   user_id: number;
   strategy_name: string | null;
   strategy_running: boolean | null;
+  pending_strategy_run: boolean;
   created_at: string;
 }
 

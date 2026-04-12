@@ -10,6 +10,7 @@ pub struct Portfolio {
     pub user_id: Option<i64>,
     pub strategy_name: Option<String>,
     pub strategy_running: Option<bool>,
+    pub pending_strategy_run: bool,
     pub created_at: DateTime<Utc>,
 }
 
