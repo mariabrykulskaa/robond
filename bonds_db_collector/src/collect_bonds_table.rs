@@ -1,11 +1,11 @@
+//! Загрузка информации об облигациях в таблицу `bonds`
+
 use dotenvy::dotenv;
 use std::env;
 use t_invest_api_rust::{
     EndPoint,
     proto::{InstrumentStatus, InstrumentsRequest},
 };
-
-use bonds_db_client;
 
 #[tokio::main]
 async fn main() {

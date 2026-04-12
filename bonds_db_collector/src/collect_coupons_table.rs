@@ -1,3 +1,5 @@
+//! Загрузка информации о купонах в таблицу `coupons`
+
 use dotenvy::dotenv;
 use std::{env, time::Instant};
 use t_invest_api_rust::{
@@ -8,8 +10,6 @@ use timestamp_utils::{MAX_TIMESTAMP, MIN_TIMESTAMP};
 use uuid::Uuid;
 
 mod requests;
-
-use bonds_db_client;
 
 use async_trait::async_trait;
 
