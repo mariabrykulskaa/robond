@@ -7,6 +7,7 @@ mod routes;
 mod state;
 
 use config::ApiConfig;
+use chrono::Timelike;
 use portfolio::PortfolioClient;
 use sqlx::postgres::PgPoolOptions;
 use state::AppState;
@@ -58,7 +59,10 @@ async fn main() {
 }
 
 /// Background task: every 60s, check if exchange is open and execute pending strategy runs.
+/// Also runs daily auto-execution at ~10:15 MSK for all portfolios with active strategies.
 async fn pending_strategy_scheduler(state: state::AppState) {
+    let mut last_daily_run: Option<chrono::NaiveDate> = None;
+
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
 
@@ -66,7 +70,55 @@ async fn pending_strategy_scheduler(state: state::AppState) {
             continue;
         }
 
-        // Find all portfolios with pending runs
+        let moscow_now = chrono::Utc::now() + chrono::Duration::hours(3);
+        let today = moscow_now.date_naive();
+        let t = moscow_now.time();
+        let time_mins = t.hour() * 60 + t.minute();
+
+        // Daily auto-run: at 10:15+ MSK, once per day
+        let should_daily_run = time_mins >= 10 * 60 + 15
+            && last_daily_run.map_or(true, |d| d < today);
+
+        if should_daily_run {
+            last_daily_run = Some(today);
+            tracing::info!("Scheduler: daily strategy run triggered at {}", moscow_now.format("%H:%M MSK"));
+
+            // Get all portfolios with active strategy + T-Invest connected
+            let all_rows: Vec<(i64, i64)> = match sqlx::query_as(
+                "SELECT p.id, p.user_id FROM portfolio p WHERE p.strategy_name IS NOT NULL AND p.tinvest_token IS NOT NULL"
+            )
+            .fetch_all(&state.pool)
+            .await
+            {
+                Ok(rows) => rows,
+                Err(e) => {
+                    tracing::error!("Scheduler: failed to query daily portfolios: {e}");
+                    vec![]
+                }
+            };
+
+            for (portfolio_id, user_id) in all_rows {
+                tracing::info!("Scheduler: daily run for portfolio {portfolio_id}");
+                match routes::strategy::execute_strategy(
+                    &state.pool,
+                    &state.portfolio_client,
+                    portfolio_id,
+                    user_id,
+                )
+                .await
+                {
+                    Ok(result) => {
+                        tracing::info!("Scheduler: portfolio {portfolio_id} done — {}", result.message);
+                    }
+                    Err(e) => {
+                        tracing::error!("Scheduler: portfolio {portfolio_id} failed — {e:?}");
+                    }
+                }
+            }
+            continue; // daily run covers pending too
+        }
+
+        // Pending runs (queued outside trading hours)
         let rows: Vec<(i64, i64)> = match sqlx::query_as(
             "SELECT p.id, p.user_id FROM portfolio p WHERE p.pending_strategy_run = TRUE AND p.strategy_name IS NOT NULL AND p.tinvest_token IS NOT NULL"
         )
@@ -95,7 +147,6 @@ async fn pending_strategy_scheduler(state: state::AppState) {
                 }
                 Err(e) => {
                     tracing::error!("Scheduler: portfolio {portfolio_id} failed — {e:?}");
-                    // Clear pending flag to avoid infinite retries
                     let _ = sqlx::query("UPDATE portfolio SET pending_strategy_run = FALSE WHERE id = $1")
                         .bind(portfolio_id)
                         .execute(&state.pool)
