@@ -39,6 +39,7 @@ export default function PortfolioDetailPage() {
   const [runningStrategy, setRunningStrategy] = useState(false);
   const [strategyMessage, setStrategyMessage] = useState("");
   const [changingStrategy, setChangingStrategy] = useState(false);
+  const [settingStrategy, setSettingStrategy] = useState(false);
   const [selectedBond, setSelectedBond] = useState<BondInfo | null>(null);
   const [loadingBond, setLoadingBond] = useState(false);
 
@@ -129,8 +130,6 @@ export default function PortfolioDetailPage() {
       setImporting(false);
     }
   };
-
-  const [settingStrategy, setSettingStrategy] = useState(false);
 
   const handleSetStrategy = async (strategyId: string) => {
     setSettingStrategy(true);
