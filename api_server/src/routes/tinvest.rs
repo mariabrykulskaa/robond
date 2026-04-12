@@ -78,7 +78,7 @@ pub async fn fetch_accounts(
 
     let mut client = t_invest_api_rust::Client::try_new(req.token, ep)
         .await
-        .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
+        .map_err(|e| AppError::BadRequest(format!("Не удалось подключиться к T-Invest: {e}")))?;
 
     let is_sandbox = matches!(ep, t_invest_api_rust::EndPoint::Sandbox);
 
@@ -90,7 +90,7 @@ pub async fn fetch_accounts(
                 name: Some("Sandbox".to_string()),
             })
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to create sandbox account: {e}")))?
+            .map_err(|e| AppError::BadRequest(format!("Не удалось создать sandbox-счёт: {e}")))?
             .into_inner();
 
         // Top up the new sandbox account
@@ -106,7 +106,7 @@ pub async fn fetch_accounts(
                 }),
             })
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to top up sandbox: {e}")))?;
+            .map_err(|e| AppError::BadRequest(format!("Не удалось пополнить sandbox: {e}")))?;
 
         tracing::info!("Created sandbox account {} with {} RUB", new_acc.account_id, amount);
 
@@ -125,7 +125,7 @@ pub async fn fetch_accounts(
         .users
         .get_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
         .await
-        .map_err(|e| AppError::Internal(format!("Failed to get accounts: {e}")))?
+        .map_err(|e| AppError::BadRequest(format!("Не удалось получить счета: {e}")))?
         .into_inner();
 
     let accounts = response
