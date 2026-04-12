@@ -41,6 +41,9 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: npm run build
 
+      - name: Copy index.html to 404.html for SPA routing
+        run: cp web/dist/index.html web/dist/404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
