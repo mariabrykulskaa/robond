@@ -163,7 +163,13 @@ pub async fn make_order(
     ticker_to_info: &HashMap<String, Bond>,
     account_id: &str,
 ) {
-    let bond_info = ticker_to_info.get(&order.isin).unwrap();
+    let bond_info = match ticker_to_info.get(&order.isin) {
+        Some(info) => info,
+        None => {
+            eprintln!("[live_engine] Bond {} not found in ticker_to_info, skipping order", order.isin);
+            return;
+        }
+    };
     let mut request = PostOrderRequest {
         quantity: order.count,
         account_id: account_id.to_string(),
@@ -177,7 +183,14 @@ pub async fn make_order(
     request.set_order_type(OrderType::Market);
     request.set_price_type(PriceType::Currency);
 
-    client.orders.post_order(request).await.unwrap().into_inner();
+    match client.orders.post_order(request).await {
+        Ok(_) => {
+            eprintln!("[live_engine] Order executed: {:?} {} x{}", order.order_type, order.isin, order.count);
+        }
+        Err(e) => {
+            eprintln!("[live_engine] Order failed for {} (skipping): {}", order.isin, e);
+        }
+    }
 }
 
 pub async fn make_orders(
