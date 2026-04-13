@@ -54,7 +54,7 @@ impl Default for YieldMaximizerStrategy {
             min_yield_urgent: 0.005,
             cash_urgency_threshold: 0.30,
             min_volume_for_buy: 50,
-            hard_deadline: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            hard_deadline: NaiveDate::from_ymd_opt(2027, 12, 31).unwrap(),
             stop_loss_pct: 70.0,
         }
     }
