@@ -23,7 +23,7 @@ pub fn build_router(state: AppState) -> Router {
 
     let portfolio_routes = Router::new()
         .route("/", get(portfolio::list).post(portfolio::create))
-        .route("/{id}", get(portfolio::get))
+        .route("/{id}", get(portfolio::get).delete(portfolio::delete))
         .route("/{id}/holdings", get(holdings::list))
         .route("/{id}/holdings/{isin}", put(holdings::set))
         .route("/{id}/cash", get(cash::get).put(cash::set))

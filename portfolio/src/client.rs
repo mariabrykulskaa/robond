@@ -123,6 +123,33 @@ impl PortfolioClient {
         .ok_or(Error::PortfolioNotFound(portfolio_id))
     }
 
+    /// Удалить портфель пользователя и все связанные данные.
+    pub async fn delete_portfolio_for_user(&self, user_id: i64, portfolio_id: i64) -> Result<()> {
+        // Удаляем связанные данные
+        sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
+            .bind(portfolio_id)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM portfolio_cash WHERE portfolio_id = $1")
+            .bind(portfolio_id)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM portfolio_snapshot WHERE portfolio_id = $1")
+            .bind(portfolio_id)
+            .execute(&self.pool)
+            .await?;
+        // Удаляем сам портфель
+        let result = sqlx::query("DELETE FROM portfolio WHERE id = $1 AND user_id = $2")
+            .bind(portfolio_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(Error::PortfolioNotFound(portfolio_id));
+        }
+        Ok(())
+    }
+
     // ── Стратегии ──────────────────────────────────────────────
 
     /// Назначить стратегию на портфель.
