@@ -16,6 +16,10 @@ export async function getPortfolio(id: number): Promise<Portfolio> {
   return data;
 }
 
+export async function deletePortfolio(id: number): Promise<void> {
+  await api.delete(`/portfolios/${id}`);
+}
+
 export async function getHoldings(portfolioId: number): Promise<PortfolioHolding[]> {
   const { data } = await api.get<PortfolioHolding[]>(`/portfolios/${portfolioId}/holdings`);
   return data;

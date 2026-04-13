@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { usePortfolios, useCreatePortfolio } from "../hooks/usePortfolios";
+import { usePortfolios, useCreatePortfolio, useDeletePortfolio } from "../hooks/usePortfolios";
 
 export default function PortfolioListPage() {
   const { data: portfolios, isLoading, error } = usePortfolios();
   const createMutation = useCreatePortfolio();
+  const deleteMutation = useDeletePortfolio();
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState("");
 
@@ -33,12 +34,37 @@ export default function PortfolioListPage() {
 
       <div className="card-grid">
         {portfolios?.map((p) => (
-          <Link to={`/portfolio/${p.id}`} key={p.id} className="portfolio-card">
-            <h3>{p.name}</h3>
-            <span className="meta">
-              Created {new Date(p.created_at).toLocaleDateString()}
-            </span>
-          </Link>
+          <div key={p.id} className="portfolio-card" style={{ position: "relative" }}>
+            <Link to={`/portfolio/${p.id}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+              <h3>{p.name}</h3>
+              <span className="meta">
+                Created {new Date(p.created_at).toLocaleDateString()}
+              </span>
+            </Link>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirm(`Удалить портфель "${p.name}"?`)) {
+                  deleteMutation.mutate(p.id);
+                }
+              }}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                background: "transparent",
+                border: "none",
+                color: "#f44336",
+                cursor: "pointer",
+                fontSize: 18,
+                padding: "4px 8px",
+                borderRadius: 4,
+              }}
+              title="Удалить портфель"
+            >
+              ✕
+            </button>
+          </div>
         ))}
       </div>
 
