@@ -83,7 +83,22 @@ pub async fn fetch_accounts(
     let is_sandbox = matches!(ep, t_invest_api_rust::EndPoint::Sandbox);
 
     if is_sandbox {
-        // Always create a fresh sandbox account for each portfolio
+        // Check existing sandbox accounts
+        let existing = client
+            .sandbox
+            .get_sandbox_accounts(t_invest_api_rust::proto::GetAccountsRequest { status: None })
+            .await;
+
+        if let Ok(resp) = existing {
+            let accounts = resp.into_inner().accounts;
+            if accounts.len() >= 5 {
+                return Err(AppError::BadRequest(
+                    "Достигнут лимит sandbox-аккаунтов (5). Удалите существующий портфель с sandbox-подключением, чтобы освободить место.".into(),
+                ));
+            }
+        }
+
+        // Create a fresh sandbox account
         let new_acc = client
             .sandbox
             .open_sandbox_account(t_invest_api_rust::proto::OpenSandboxAccountRequest {
@@ -239,6 +254,23 @@ pub async fn disconnect(
         .portfolio_client
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
+
+    // Close sandbox account in T-Invest if it was a sandbox connection
+    if let Ok((token, account_id, endpoint)) =
+        get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await
+    {
+        if endpoint == "sandbox" {
+            let ep = t_invest_api_rust::EndPoint::Sandbox;
+            if let Ok(mut client) = t_invest_api_rust::Client::try_new(token, ep).await {
+                let _ = client
+                    .sandbox
+                    .close_sandbox_account(t_invest_api_rust::proto::CloseSandboxAccountRequest {
+                        account_id,
+                    })
+                    .await;
+            }
+        }
+    }
 
     sqlx::query(
         "UPDATE portfolio SET tinvest_token = NULL, tinvest_account_id = NULL, tinvest_endpoint = 'sandbox' WHERE id = $1 AND user_id = $2",
