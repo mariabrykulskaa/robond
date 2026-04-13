@@ -1,5 +1,6 @@
 //! Загрузка информации о купонах в таблицу `coupons`
 
+use bonds_db_client::ClientConfig;
 use dotenvy::dotenv;
 use std::{env, time::Instant};
 use t_invest_api_rust::{
@@ -40,8 +41,7 @@ async fn main() {
         t_bank_clients.push(t_bank_client);
     }
 
-    let database_url = env::var("DATABASE_URL").unwrap();
-    let db_client = bonds_db_client::Client::new(&database_url).await.unwrap();
+    let db_client = bonds_db_client::Client::new(&ClientConfig::from_env()).await.unwrap();
 
     let bonds = db_client.bonds.read().await.unwrap();
 

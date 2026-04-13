@@ -5,6 +5,8 @@ pub mod coupons_table_client;
 mod error;
 pub mod events_table_client;
 
+use std::env;
+
 use crate::{
     bonds_table_client::BondsTableClient, coupons_table_client::CouponsTableClient,
     events_table_client::EventsTableClient,
@@ -14,6 +16,37 @@ use sqlx::postgres::PgPoolOptions;
 
 pub use error::{Error, Result};
 
+#[derive(Debug, Clone)]
+pub struct ClientConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    /// Максимальное число соединений в пуле (по умолчанию 5).
+    pub max_connections: u32,
+}
+
+impl ClientConfig {
+    pub fn from_env() -> Self {
+        dotenvy::dotenv().ok();
+
+        Self {
+            host: env::var("BONDS_DB_HOST").unwrap(),
+            port: env::var("BONDS_DB_PORT").unwrap().parse::<u16>().unwrap(),
+            username: env::var("BONDS_DB_USERNAME").unwrap(),
+            password: env::var("BONDS_DB_PASSWORD").unwrap(),
+            max_connections: 5,
+        }
+    }
+
+    pub fn database_url(&self) -> String {
+        format!(
+            "postgresql://{}:{}@{}:{}/bonds_db",
+            self.username, self.password, self.host, self.port
+        )
+    }
+}
+
 pub struct Client {
     pub bonds: BondsTableClient,
     pub coupons: CouponsTableClient,
@@ -21,8 +54,11 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(url: &str) -> Result<Self> {
-        let pool = PgPoolOptions::new().max_connections(5).connect(url).await?;
+    pub async fn new(config: &ClientConfig) -> Result<Self> {
+        let pool = PgPoolOptions::new()
+            .max_connections(config.max_connections)
+            .connect(&config.database_url())
+            .await?;
         Ok(Client {
             bonds: BondsTableClient::new(pool.clone()),
             coupons: CouponsTableClient::new(pool.clone()),

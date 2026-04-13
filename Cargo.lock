@@ -251,6 +251,7 @@ dependencies = [
 name = "bonds_db_client"
 version = "0.1.0"
 dependencies = [
+ "dotenvy",
  "prost",
  "sqlx",
  "t-invest-api-rust",
