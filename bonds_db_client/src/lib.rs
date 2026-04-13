@@ -4,12 +4,13 @@ pub mod bonds_table_client;
 pub mod coupons_table_client;
 mod error;
 pub mod events_table_client;
+pub mod user_manager;
 
 use std::env;
 
 use crate::{
     bonds_table_client::BondsTableClient, coupons_table_client::CouponsTableClient,
-    events_table_client::EventsTableClient,
+    events_table_client::EventsTableClient, user_manager::UserManager,
 };
 
 use sqlx::postgres::PgPoolOptions;
@@ -51,6 +52,7 @@ pub struct Client {
     pub bonds: BondsTableClient,
     pub coupons: CouponsTableClient,
     pub events: EventsTableClient,
+    pub user: UserManager,
 }
 
 impl Client {
@@ -62,7 +64,8 @@ impl Client {
         Ok(Client {
             bonds: BondsTableClient::new(pool.clone()),
             coupons: CouponsTableClient::new(pool.clone()),
-            events: EventsTableClient::new(pool),
+            events: EventsTableClient::new(pool.clone()),
+            user: UserManager::new(pool),
         })
     }
 }
