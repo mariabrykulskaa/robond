@@ -84,6 +84,9 @@ export default function PortfolioDetailPage() {
     try {
       await tinvestApi.connect(portfolioId, token, accountId, endpoint);
       queryClient.invalidateQueries({ queryKey: ["tinvest-status", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["holdings", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["cash", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["portfolioValue", portfolioId] });
       setToken("");
       setAccounts(null);
     } catch (e: any) {
@@ -96,6 +99,9 @@ export default function PortfolioDetailPage() {
   const handleDisconnect = async () => {
     await tinvestApi.disconnect(portfolioId);
     queryClient.invalidateQueries({ queryKey: ["tinvest-status", portfolioId] });
+    queryClient.invalidateQueries({ queryKey: ["holdings", portfolioId] });
+    queryClient.invalidateQueries({ queryKey: ["cash", portfolioId] });
+    queryClient.invalidateQueries({ queryKey: ["portfolioValue", portfolioId] });
   };
 
   const handleBondClick = async (isin: string) => {
