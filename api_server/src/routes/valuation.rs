@@ -8,10 +8,7 @@ use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::state::AppState;
 use t_invest_api_rust::decimal::{money_value_to_decimal, quotation_to_decimal};
-use t_invest_api_rust::proto::{
-    FindInstrumentRequest, GetLastPricesRequest, InstrumentIdType, InstrumentRequest,
-    InstrumentType, LastPriceType,
-};
+use t_invest_api_rust::proto::PortfolioRequest;
 
 #[derive(Serialize)]
 pub struct HoldingValue {
@@ -57,7 +54,7 @@ pub async fn get_portfolio_value(
     // Get T-Invest token from portfolio
     let tinvest = super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await;
 
-    let (token, _account_id, endpoint) = match tinvest {
+    let (token, account_id, endpoint) = match tinvest {
         Ok(creds) => creds,
         Err(_) => {
             // No T-Invest — return holdings without prices
@@ -90,115 +87,73 @@ pub async fn get_portfolio_value(
         .await
         .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
 
-    // Resolve each ISIN to bond info (name, nominal, aci, ticker_classCode)
-    struct BondMeta {
+    // Use GetPortfolio — returns positions with current prices directly
+    let portfolio_resp = client
+        .operations
+        .get_portfolio(PortfolioRequest {
+            account_id: account_id.clone(),
+            currency: None,
+        })
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?
+        .into_inner();
+
+    // Build ticker → position data from T-Invest portfolio
+    struct PositionData {
         name: String,
-        figi: String,
-        nominal: Decimal,
-        aci_value: Decimal,
+        price_per_one: Decimal,
     }
 
-    let mut meta: HashMap<String, BondMeta> = HashMap::new();
-    let mut instrument_ids: Vec<String> = Vec::new();
+    let mut position_map: HashMap<String, PositionData> = HashMap::new();
+    for pos in &portfolio_resp.positions {
+        if pos.instrument_type != "bond" {
+            continue;
+        }
+        let _qty = pos
+            .quantity
+            .as_ref()
+            .map(|q| quotation_to_decimal(q.clone()))
+            .unwrap_or(Decimal::ZERO);
+        let price = pos
+            .current_price
+            .as_ref()
+            .map(money_value_to_decimal)
+            .unwrap_or(Decimal::ZERO);
+        let nkd = pos
+            .current_nkd
+            .as_ref()
+            .map(money_value_to_decimal)
+            .unwrap_or(Decimal::ZERO);
 
-    for h in &holdings {
-        let search = client
-            .instruments
-            .find_instrument(FindInstrumentRequest {
-                query: h.isin.clone(),
-                instrument_kind: Some(InstrumentType::Bond.into()),
-                api_trade_available_flag: None,
-            })
-            .await;
-
-        let found = match search {
-            Ok(resp) => resp.into_inner().instruments.into_iter().next(),
-            Err(_) => None,
-        };
-
-        if let Some(found) = found {
-            let bond_resp = client
-                .instruments
-                .bond_by(InstrumentRequest {
-                    id_type: InstrumentIdType::Figi.into(),
-                    class_code: None,
-                    id: found.figi.clone(),
-                })
-                .await;
-
-            if let Ok(resp) = bond_resp {
-                if let Some(bond) = resp.into_inner().instrument {
-                    let nominal = bond
-                        .nominal
-                        .as_ref()
-                        .map(money_value_to_decimal)
-                        .unwrap_or(Decimal::from(1000));
-                    let aci = bond
-                        .aci_value
-                        .as_ref()
-                        .map(money_value_to_decimal)
-                        .unwrap_or(Decimal::ZERO);
-
-                    instrument_ids.push(bond.figi.clone());
-
-                    meta.insert(
-                        h.isin.clone(),
-                        BondMeta {
-                            name: bond.name,
-                            figi: bond.figi,
-                            nominal,
-                            aci_value: aci,
-                        },
-                    );
-                }
-            }
+        let ticker = &pos.ticker;
+        if !ticker.is_empty() {
+            position_map.insert(
+                ticker.clone(),
+                PositionData {
+                    name: ticker.clone(),
+                    price_per_one: price + nkd,
+                },
+            );
+        }
+        // Also index by figi for fallback matching
+        if !pos.figi.is_empty() {
+            position_map.insert(
+                pos.figi.clone(),
+                PositionData {
+                    name: ticker.clone(),
+                    price_per_one: price + nkd,
+                },
+            );
         }
     }
 
-    // Batch-fetch last prices (default type = any last known price)
-    let last_prices = if !instrument_ids.is_empty() {
-        let mut request = GetLastPricesRequest {
-            instrument_id: instrument_ids,
-            ..GetLastPricesRequest::default()
-        };
-        request.set_last_price_type(LastPriceType::LastPriceExchange);
-        client
-            .market_data
-            .get_last_prices(request)
-            .await
-            .ok()
-            .map(|r| r.into_inner().last_prices)
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
-
-    // figi → price in points
-    let mut figi_points: HashMap<String, Decimal> = HashMap::new();
-    for lp in &last_prices {
-        if let Some(ref price) = lp.price {
-            figi_points.insert(lp.figi.clone(), quotation_to_decimal(price.clone()));
-            // Also index by instrument_uid if present
-            if !lp.instrument_uid.is_empty() {
-                figi_points.insert(lp.instrument_uid.clone(), quotation_to_decimal(price.clone()));
-            }
-        }
-    }
-
-    // Assemble result
+    // Assemble result matching DB holdings with T-Invest position data
     let mut total_bonds = Decimal::ZERO;
     let mut result_holdings = Vec::with_capacity(holdings.len());
 
     for h in &holdings {
-        let (name, price_rub, estimated) = if let Some(bm) = meta.get(&h.isin) {
-            if let Some(pts) = figi_points.get(&bm.figi) {
-                let price = *pts / Decimal::from(100) * bm.nominal + bm.aci_value;
-                (bm.name.clone(), price, false)
-            } else {
-                // No market price — fallback to nominal + ACI
-                let price = bm.nominal + bm.aci_value;
-                (bm.name.clone(), price, true)
-            }
+        let (name, price_rub, estimated) = if let Some(pd) = position_map.get(&h.isin) {
+            (pd.name.clone(), pd.price_per_one, false)
         } else {
             (h.isin.clone(), Decimal::ZERO, true)
         };
