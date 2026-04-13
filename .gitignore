@@ -1,5 +1,6 @@
 target
 .env
+bonds_db/.env
 history_sample.txt
 schema.txt
 history_market_data/candles_*.txt
