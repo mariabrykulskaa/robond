@@ -10,3 +10,7 @@ t-invest-api-rust = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 dotenvy = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+timestamp_utils = { workspace = true }
