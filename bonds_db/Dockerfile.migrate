@@ -1,0 +1,13 @@
+FROM rust:1.94.1-slim-trixie
+
+WORKDIR /app
+
+# Ставим sqlx-cli (только поддержка Postgres)
+RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
+
+# Копируем миграции в образ
+COPY migrations migrations
+
+# Запускаем миграции; DATABASE_URL прилетает из docker-compose
+CMD ["sqlx", "migrate", "run"]
+
