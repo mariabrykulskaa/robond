@@ -9,6 +9,12 @@ services:
       - "5432:5432"
     volumes:
       - bonds_database:/var/lib/postgresql
+      - ./certs:/certs:ro
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/certs/server.crt
+      -c ssl_key_file=/certs/server.key
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 0.5s
@@ -20,7 +26,7 @@ services:
       context: .
       dockerfile: Dockerfile.migrate
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/bonds_db
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/bonds_db?sslmode=require
     depends_on:
       postgres:
         condition: service_healthy
