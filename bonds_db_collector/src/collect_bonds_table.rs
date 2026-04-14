@@ -1,5 +1,6 @@
 //! Загрузка информации об облигациях в таблицу `bonds`
 
+use bonds_db_client::ClientConfig;
 use dotenvy::dotenv;
 use std::env;
 use t_invest_api_rust::{
@@ -25,8 +26,7 @@ async fn main() {
 
     dbg!(bonds.len());
 
-    let database_url = env::var("DATABASE_URL").unwrap();
-    let db_client = bonds_db_client::Client::new(&database_url).await.unwrap();
+    let db_client = bonds_db_client::Client::new(&ClientConfig::from_env()).await.unwrap();
     db_client.bonds.clear().await.unwrap();
     db_client.bonds.insert(&bonds).await.unwrap();
 }
