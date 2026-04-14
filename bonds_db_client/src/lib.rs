@@ -25,6 +25,7 @@ pub struct ClientConfig {
     pub password: String,
     /// Максимальное число соединений в пуле (по умолчанию 5).
     pub max_connections: u32,
+    pub ssl_root_cert_path: String,
 }
 
 impl ClientConfig {
@@ -37,13 +38,14 @@ impl ClientConfig {
             username: env::var("BONDS_DB_USERNAME").unwrap(),
             password: env::var("BONDS_DB_PASSWORD").unwrap(),
             max_connections: 5,
+            ssl_root_cert_path: env::var("BONDS_DB_SSL_ROOT_CERT_PATH").unwrap(),
         }
     }
 
     pub fn database_url(&self) -> String {
         format!(
-            "postgresql://{}:{}@{}:{}/bonds_db",
-            self.username, self.password, self.host, self.port
+            "postgresql://{}:{}@{}:{}/bonds_db?sslmode=verify-full&sslrootcert={}",
+            self.username, self.password, self.host, self.port, self.ssl_root_cert_path
         )
     }
 }
