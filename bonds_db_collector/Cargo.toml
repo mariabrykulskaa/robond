@@ -1,0 +1,36 @@
+[package]
+name = "bonds_db_collector"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+t-invest-api-rust = { workspace = true }
+tonic = { workspace = true }
+
+tokio = { workspace = true }
+dotenvy = { workspace = true }
+bonds_db_client = { workspace = true }
+chrono = { workspace = true }
+prost-types = { workspace = true }
+
+async-trait = { workspace = true }
+
+timestamp_utils = { workspace = true }
+
+serde_json = { workspace = true }
+
+uuid = { workspace = true }
+
+indicatif = { workspace = true }
+
+[[bin]]
+name = "collect_bonds_table"
+path = "src/collect_bonds_table.rs"
+
+[[bin]]
+name = "collect_coupons_table"
+path = "src/collect_coupons_table.rs"
+
+[[bin]]
+name = "collect_events_table"
+path = "src/collect_events_table.rs"

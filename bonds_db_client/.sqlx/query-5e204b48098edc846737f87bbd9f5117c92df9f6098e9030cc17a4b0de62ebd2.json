@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO bonds (instrument_uid, bond)\n            SELECT * FROM UNNEST($1::uuid[], $2::bytea[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e204b48098edc846737f87bbd9f5117c92df9f6098e9030cc17a4b0de62ebd2"
+}
