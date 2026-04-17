@@ -5,9 +5,9 @@
 //! use bonds_db_client::{Client, ClientConfig};
 //! use t_invest_api_rust::decimal::money_value_to_decimal;
 //! use timestamp_utils::timestamp_to_datetime;
-//! 
+//!
 //! const TICKER: &str = "RU000A1062L7";
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() {
 //!     let client = Client::new(&ClientConfig::from_env()).await.unwrap();
@@ -15,11 +15,11 @@
 //!     let bonds = bonds.iter().filter(|&bond| bond.ticker == TICKER).collect::<Vec<_>>();
 //!     let [bond] = bonds.try_into().unwrap();
 //!     let instrument_uid = bond.uid.clone();
-//! 
+//!
 //!     let coupons = client.coupons.read().await.unwrap();
 //!     let coupons = coupons.iter().filter(|(uid, _coupons)| uid.to_string() == instrument_uid).collect::<Vec<_>>();
 //!     let [(_, coupons)] = coupons.try_into().unwrap();
-//! 
+//!
 //!     for coupon in coupons {
 //!         let timestamp = coupon.coupon_date.unwrap();
 //!         let datetime = timestamp_to_datetime(timestamp);
@@ -29,7 +29,7 @@
 //!         println!("{}", pay_one_bond);
 //!     }
 //!     println!();
-//! 
+//!
 //!     let events = client.events.read().await.unwrap();
 //!     let events = events.iter().filter(|(uid, _events)| uid.to_string() == instrument_uid).collect::<Vec<_>>();
 //!     let [(_, events)] = events.try_into().unwrap();
