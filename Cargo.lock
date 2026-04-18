@@ -256,6 +256,8 @@ dependencies = [
  "sqlx",
  "t-invest-api-rust",
  "thiserror 2.0.18",
+ "timestamp_utils",
+ "tokio",
  "uuid",
 ]
 
