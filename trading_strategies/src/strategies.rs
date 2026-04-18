@@ -57,6 +57,7 @@ impl Strategy for MostProfitableBondStrategy {
         let most_profitable_bond = isin_to_yield
             .iter()
             .max_by(|&(_key1, val1), &(_key2, val2)| val1.partial_cmp(val2).unwrap());
+        #[allow(clippy::collapsible_match)]
         match most_profitable_bond {
             None => {}
             Some((most_profitable_bond, &bond_yield)) => {
