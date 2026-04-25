@@ -54,31 +54,35 @@ use t_invest_api_rust::{
 use trading_strategies::{Isin, MarketOrder, MarketOrderType, Portfolio, Strategy};
 
 /// Получает состояние портфеля
-pub async fn get_portfolio(client: &mut Client, account_id: &str) -> Portfolio {
+pub async fn get_portfolio(client: &mut Client, account_id: &str) -> Result<Portfolio, String> {
     let response = client
         .operations
         .get_positions(PositionsRequest {
             account_id: account_id.to_string(),
         })
         .await
-        .unwrap()
+        .map_err(|e| format!("Failed to get positions: {e}"))?
         .into_inner();
-    assert_eq!(response.money.len(), 1);
-    let money = &response.money[0];
-    assert_eq!(money.currency, "rub");
-    let rub = money_value_to_decimal(money);
+
+    let rub = response
+        .money
+        .iter()
+        .find(|m| m.currency == "rub")
+        .map(money_value_to_decimal)
+        .unwrap_or(Decimal::ZERO);
 
     let mut bonds_count = HashMap::<Isin, i64>::new();
 
     for security in response.securities.iter() {
-        assert_eq!(security.instrument_type, "bond");
-        bonds_count.insert(security.ticker.clone(), security.balance);
+        if security.instrument_type == "bond" {
+            bonds_count.insert(security.ticker.clone(), security.balance);
+        }
     }
 
-    Portfolio {
+    Ok(Portfolio {
         free_money: rub,
         bonds_count,
-    }
+    })
 }
 
 pub async fn get_ticker_to_info(client: &mut Client) -> HashMap<String, Bond> {
@@ -184,7 +188,7 @@ use chrono::prelude::*;
 use history_market_data::MarketDataClient;
 
 pub async fn run<T: Strategy>(account_id: &str, client: &mut Client, stgategy: T) {
-    let portfolio = get_portfolio(client, account_id).await;
+    let portfolio = get_portfolio(client, account_id).await.expect("failed to get portfolio");
     let ticker_to_info = get_ticker_to_info(client).await;
     let prices = get_prices(client, &ticker_to_info).await;
 

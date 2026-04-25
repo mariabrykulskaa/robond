@@ -240,7 +240,9 @@ pub async fn import_portfolio(
         .await
         .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
 
-    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id).await;
+    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
 
     let mut holdings_imported = 0;
     for (isin, &quantity) in &tinvest_portfolio.bonds_count {
