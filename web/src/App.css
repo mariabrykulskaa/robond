@@ -447,3 +447,28 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.holdings-row-clickable:hover {
+  background: #f0f4ff;
+  transition: background 0.15s;
+}
+
+.bond-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.bond-info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+
+.bond-info-label {
+  color: #888;
+  font-weight: 500;
+}
