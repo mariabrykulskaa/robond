@@ -5,6 +5,7 @@ pub mod portfolio;
 pub mod snapshots;
 pub mod strategy;
 pub mod tinvest;
+pub mod valuation;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
@@ -28,6 +29,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/{id}/cash", get(cash::get).put(cash::set))
         .route("/{id}/snapshots", get(snapshots::list))
         .route("/{id}/return", get(snapshots::total_return))
+        .route("/{id}/value", get(valuation::get_portfolio_value))
         .route(
             "/{id}/strategy",
             put(strategy::set_strategy).delete(strategy::clear_strategy),

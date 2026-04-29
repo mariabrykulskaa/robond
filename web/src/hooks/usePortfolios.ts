@@ -43,6 +43,13 @@ export function useTotalReturn(portfolioId: number) {
   });
 }
 
+export function usePortfolioValue(portfolioId: number) {
+  return useQuery({
+    queryKey: ["portfolioValue", portfolioId],
+    queryFn: () => portfolioApi.getPortfolioValue(portfolioId),
+  });
+}
+
 export function useCreatePortfolio() {
   const queryClient = useQueryClient();
   return useMutation({

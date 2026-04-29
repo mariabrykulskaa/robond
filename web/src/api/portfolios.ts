@@ -35,3 +35,23 @@ export async function getTotalReturn(portfolioId: number): Promise<{ total_retur
   const { data } = await api.get<{ total_return: string | null }>(`/portfolios/${portfolioId}/return`);
   return data;
 }
+
+export interface HoldingValue {
+  isin: string;
+  name: string;
+  quantity: number;
+  price: string | null;
+  value: string | null;
+}
+
+export interface PortfolioValue {
+  holdings: HoldingValue[];
+  bonds_value: string;
+  cash: string;
+  total_value: string;
+}
+
+export async function getPortfolioValue(portfolioId: number): Promise<PortfolioValue> {
+  const { data } = await api.get<PortfolioValue>(`/portfolios/${portfolioId}/value`);
+  return data;
+}
