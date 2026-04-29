@@ -23,5 +23,6 @@ portfolio = { path = "../portfolio" }
 history_market_data = { path = "../history_market_data" }
 live_engine = { path = "../live_engine" }
 t-invest-api-rust = { workspace = true }
+prost-types = "0.13"
 trading_strategies = { workspace = true }
 backtest_engine = { workspace = true }
