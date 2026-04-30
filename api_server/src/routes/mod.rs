@@ -34,14 +34,14 @@ pub fn build_router(state: AppState) -> Router {
             "/{id}/strategy",
             put(strategy::set_strategy).delete(strategy::clear_strategy),
         )
-        .route("/{id}/strategy/run", post(strategy::run_strategy));
+        .route("/{id}/strategy/run", post(strategy::run_strategy))
+        .route("/{id}/connect", post(tinvest::connect))
+        .route("/{id}/tinvest-status", get(tinvest::status))
+        .route("/{id}/disconnect", delete(tinvest::disconnect))
+        .route("/{id}/import", post(tinvest::import_portfolio));
 
     let tinvest_routes = Router::new()
-        .route("/accounts", post(tinvest::fetch_accounts))
-        .route("/connect", post(tinvest::connect))
-        .route("/status", get(tinvest::status))
-        .route("/disconnect", delete(tinvest::disconnect))
-        .route("/import/{portfolio_id}", post(tinvest::import_portfolio));
+        .route("/accounts", post(tinvest::fetch_accounts));
 
     let strategy_routes = Router::new().route("/", get(strategy::list_strategies));
 
