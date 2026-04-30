@@ -40,8 +40,9 @@ export interface HoldingValue {
   isin: string;
   name: string;
   quantity: number;
-  price: string | null;
-  value: string | null;
+  price: string;
+  value: string;
+  estimated: boolean;
 }
 
 export interface PortfolioValue {

@@ -211,7 +211,7 @@ export default function PortfolioDetailPage() {
 
       <div className="detail-grid">
         <section className="detail-section">
-          <h3>Cash</h3>
+          <h3>Счёт</h3>
           <div className="cash-amount">
             {cashData
               ? Number(cashData.amount).toLocaleString("ru-RU", {
@@ -222,58 +222,79 @@ export default function PortfolioDetailPage() {
           </div>
         </section>
 
-        <section className="detail-section">
-          <h3>Holdings ({holdings?.length || 0})</h3>
+        <section className="detail-section full-width">
+          <h3>Облигации ({holdings?.length || 0})</h3>
           {valuationLoading && <p className="meta">Загрузка цен...</p>}
-          {holdings?.length === 0 && <p className="empty-state">No holdings</p>}
-          <table className="holdings-table">
-            <thead>
-              <tr>
-                <th>ISIN</th>
-                <th>Название</th>
-                <th>Кол-во</th>
-                <th>Цена</th>
-                <th>Стоимость</th>
-              </tr>
-            </thead>
-            <tbody>
-              {holdings?.map((h) => {
-                const hv = valuation?.holdings.find((v) => v.isin === h.isin);
-                return (
-                  <tr
-                    key={h.id}
-                    onClick={() => handleBondClick(h.isin)}
-                    style={{ cursor: "pointer" }}
-                    className="holdings-row-clickable"
-                  >
-                    <td className="isin">{h.isin}</td>
-                    <td>{hv?.name || "—"}</td>
-                    <td>{h.quantity}</td>
-                    <td>
-                      {hv?.price
-                        ? Number(hv.price).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })
-                        : "—"}
-                    </td>
-                    <td>
-                      {hv?.value
-                        ? Number(hv.value).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })
-                        : "—"}
-                    </td>
+          {holdings?.length === 0 && <p className="empty-state">Нет позиций</p>}
+          {holdings && holdings.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table className="holdings-table" style={{ width: "100%", tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: "25%" }} />
+                  <col style={{ width: "30%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "18%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>ISIN</th>
+                    <th>Название</th>
+                    <th style={{ textAlign: "right" }}>Кол-во</th>
+                    <th style={{ textAlign: "right" }}>Цена</th>
+                    <th style={{ textAlign: "right" }}>Стоимость</th>
                   </tr>
-                );
-              })}
-            </tbody>
-            {valuation && (
-              <tfoot>
-                <tr style={{ fontWeight: "bold" }}>
-                  <td colSpan={4} style={{ textAlign: "right" }}>Облигации:</td>
-                  <td>
-                    {Number(valuation.bonds_value).toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+                </thead>
+                <tbody>
+                  {(valuation?.holdings ?? holdings.map((h) => ({ isin: h.isin, name: h.isin, quantity: h.quantity, price: "0", value: "0", estimated: true }))).map((hv) => (
+                    <tr
+                      key={hv.isin}
+                      onClick={() => handleBondClick(hv.isin)}
+                      style={{ cursor: "pointer" }}
+                      className="holdings-row-clickable"
+                    >
+                      <td style={{ fontSize: "0.8em", wordBreak: "break-all" }}>{hv.isin}</td>
+                      <td>{hv.name}</td>
+                      <td style={{ textAlign: "right" }}>{hv.quantity}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {Number(hv.price).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                        {hv.estimated && <span title="Оценка по номиналу" style={{ color: "#f59e0b", marginLeft: 4 }}>~</span>}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {Number(hv.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                        {hv.estimated && <span title="Оценка по номиналу" style={{ color: "#f59e0b", marginLeft: 4 }}>~</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {valuation && (
+                  <tfoot>
+                    <tr style={{ fontWeight: "bold", borderTop: "2px solid var(--border-color, #e2e8f0)" }}>
+                      <td colSpan={3}></td>
+                      <td style={{ textAlign: "right" }}>Облигации:</td>
+                      <td style={{ textAlign: "right" }}>
+                        {Number(valuation.bonds_value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                      </td>
+                    </tr>
+                    <tr style={{ fontWeight: "bold" }}>
+                      <td colSpan={3}></td>
+                      <td style={{ textAlign: "right" }}>Денежные средства:</td>
+                      <td style={{ textAlign: "right" }}>
+                        {Number(valuation.cash).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                      </td>
+                    </tr>
+                    <tr style={{ fontWeight: "bold", fontSize: "1.1em" }}>
+                      <td colSpan={3}></td>
+                      <td style={{ textAlign: "right" }}>Итого:</td>
+                      <td style={{ textAlign: "right" }}>
+                        {Number(valuation.total_value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          )}
         </section>
 
         {snapshots && snapshots.length > 0 && (
