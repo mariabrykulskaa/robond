@@ -93,7 +93,7 @@ pub async fn get_portfolio_value(
     // Resolve each ISIN to bond info (name, nominal, aci, ticker_classCode)
     struct BondMeta {
         name: String,
-        ticker: String,
+        figi: String,
         nominal: Decimal,
         aci_value: Decimal,
     }
@@ -139,13 +139,13 @@ pub async fn get_portfolio_value(
                         .map(money_value_to_decimal)
                         .unwrap_or(Decimal::ZERO);
 
-                    instrument_ids.push(format!("{}_{}", bond.ticker, bond.class_code));
+                    instrument_ids.push(bond.figi.clone());
 
                     meta.insert(
                         h.isin.clone(),
                         BondMeta {
                             name: bond.name,
-                            ticker: bond.ticker,
+                            figi: bond.figi,
                             nominal,
                             aci_value: aci,
                         },
@@ -172,11 +172,15 @@ pub async fn get_portfolio_value(
         vec![]
     };
 
-    // ticker → price in points
-    let mut ticker_points: HashMap<String, Decimal> = HashMap::new();
+    // figi → price in points
+    let mut figi_points: HashMap<String, Decimal> = HashMap::new();
     for lp in &last_prices {
         if let Some(ref price) = lp.price {
-            ticker_points.insert(lp.ticker.clone(), quotation_to_decimal(price.clone()));
+            figi_points.insert(lp.figi.clone(), quotation_to_decimal(price.clone()));
+            // Also index by instrument_uid if present
+            if !lp.instrument_uid.is_empty() {
+                figi_points.insert(lp.instrument_uid.clone(), quotation_to_decimal(price.clone()));
+            }
         }
     }
 
@@ -186,7 +190,7 @@ pub async fn get_portfolio_value(
 
     for h in &holdings {
         let (name, price_rub, estimated) = if let Some(bm) = meta.get(&h.isin) {
-            if let Some(pts) = ticker_points.get(&bm.ticker) {
+            if let Some(pts) = figi_points.get(&bm.figi) {
                 let price = *pts / Decimal::from(100) * bm.nominal + bm.aci_value;
                 (bm.name.clone(), price, false)
             } else {
