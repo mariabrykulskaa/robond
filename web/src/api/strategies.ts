@@ -16,8 +16,9 @@ export async function listStrategies(): Promise<StrategyInfo[]> {
   return data;
 }
 
-export async function setStrategy(portfolioId: number, strategyName: string): Promise<void> {
-  await api.put(`/portfolios/${portfolioId}/strategy`, { strategy_name: strategyName });
+export async function setStrategy(portfolioId: number, strategyName: string): Promise<RunResult> {
+  const { data } = await api.put<RunResult>(`/portfolios/${portfolioId}/strategy`, { strategy_name: strategyName });
+  return data;
 }
 
 export async function clearStrategy(portfolioId: number): Promise<void> {

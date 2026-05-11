@@ -38,6 +38,7 @@ export default function PortfolioDetailPage() {
   const [importing, setImporting] = useState(false);
   const [runningStrategy, setRunningStrategy] = useState(false);
   const [strategyMessage, setStrategyMessage] = useState("");
+  const [changingStrategy, setChangingStrategy] = useState(false);
   const [selectedBond, setSelectedBond] = useState<BondInfo | null>(null);
   const [loadingBond, setLoadingBond] = useState(false);
 
@@ -129,12 +130,23 @@ export default function PortfolioDetailPage() {
     }
   };
 
+  const [settingStrategy, setSettingStrategy] = useState(false);
+
   const handleSetStrategy = async (strategyId: string) => {
+    setSettingStrategy(true);
+    setStrategyMessage("");
     try {
-      await strategiesApi.setStrategy(portfolioId, strategyId);
+      const result = await strategiesApi.setStrategy(portfolioId, strategyId);
+      setStrategyMessage(result.message);
+      setChangingStrategy(false);
       queryClient.invalidateQueries({ queryKey: ["portfolio", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["holdings", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["cash", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["portfolioValue", portfolioId] });
     } catch (e: any) {
       alert(e.response?.data?.error || "Failed to set strategy");
+    } finally {
+      setSettingStrategy(false);
     }
   };
 
@@ -353,6 +365,9 @@ export default function PortfolioDetailPage() {
               >
                 {runningStrategy ? "Running..." : "Run Strategy"}
               </button>
+              <button onClick={() => setChangingStrategy(!changingStrategy)}>
+                {changingStrategy ? "Cancel" : "Change Strategy"}
+              </button>
               <button onClick={handleClearStrategy}>Remove Strategy</button>
             </div>
             {!tinvestStatus?.connected && (
@@ -363,16 +378,41 @@ export default function PortfolioDetailPage() {
             {strategyMessage && (
               <p style={{ marginTop: 8 }}>{strategyMessage}</p>
             )}
+            {changingStrategy && (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ marginBottom: 8 }}>Выберите новую стратегию (все позиции будут проданы и перекуплены):</p>
+                {settingStrategy && (
+                  <p style={{ marginBottom: 8 }}>Продаём старые позиции и покупаем по новой стратегии...</p>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {strategies?.filter(s => s.id !== portfolio?.strategy_name).map((s) => (
+                    <button
+                      key={s.id}
+                      className="strategy-card"
+                      onClick={() => handleSetStrategy(s.id)}
+                      disabled={settingStrategy}
+                    >
+                      <strong>{s.name}</strong>
+                      <span className="meta">{s.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="strategy-picker">
             <p style={{ marginBottom: 8 }}>Select a strategy:</p>
+            {settingStrategy && (
+              <p style={{ marginBottom: 8 }}>Продаём старые позиции и покупаем по новой стратегии...</p>
+            )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {strategies?.map((s) => (
                 <button
                   key={s.id}
                   className="strategy-card"
                   onClick={() => handleSetStrategy(s.id)}
+                  disabled={settingStrategy}
                 >
                   <strong>{s.name}</strong>
                   <span className="meta">{s.description}</span>
