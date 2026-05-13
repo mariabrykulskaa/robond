@@ -1,10 +1,41 @@
 use axum::extract::{Path, State};
 use axum::Json;
+use chrono::{Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::state::AppState;
+
+/// Check if MOEX bond market is open (Mon-Fri, 10:00–18:50 Moscow time).
+/// Returns Ok(()) if open or if endpoint is sandbox. Returns Err with message if closed.
+fn check_exchange_open(endpoint: &str) -> Result<(), AppError> {
+    if endpoint != "production" {
+        return Ok(()); // sandbox works 24/7
+    }
+
+    let moscow_now = Utc::now() + chrono::Duration::hours(3); // UTC+3
+    let weekday = moscow_now.weekday();
+    let hour = moscow_now.hour();
+    let minute = moscow_now.minute();
+    let time_mins = hour * 60 + minute; // minutes since midnight
+
+    let is_weekday = !matches!(weekday, chrono::Weekday::Sat | chrono::Weekday::Sun);
+    let is_trading_hours = time_mins >= 10 * 60 && time_mins <= 18 * 60 + 50; // 10:00 – 18:50
+
+    if is_weekday && is_trading_hours {
+        Ok(())
+    } else {
+        let when = if !is_weekday {
+            "Биржа не работает в выходные. Торги возобновятся в понедельник в 10:00 МСК."
+        } else if time_mins < 10 * 60 {
+            "Биржа ещё не открылась. Торги начинаются в 10:00 МСК."
+        } else {
+            "Биржа уже закрылась. Торги идут с 10:00 до 18:50 МСК."
+        };
+        Err(AppError::BadRequest(when.to_string()))
+    }
+}
 
 #[derive(Serialize)]
 pub struct StrategyInfo {
@@ -67,6 +98,9 @@ pub async fn set_strategy(
     // Get T-Invest credentials
     let (token, account_id, endpoint) =
         super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+
+    // Check if exchange is open (skip for sandbox)
+    check_exchange_open(&endpoint)?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -198,6 +232,9 @@ pub async fn run_strategy(
     // Get T-Invest credentials from portfolio
     let (token, account_id, endpoint) =
         super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+
+    // Check if exchange is open (skip for sandbox)
+    check_exchange_open(&endpoint)?;
 
     // Connect to T-Invest
     let ep = match endpoint.as_str() {
