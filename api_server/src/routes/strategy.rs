@@ -8,12 +8,8 @@ use crate::error::AppError;
 use crate::state::AppState;
 
 /// Check if MOEX bond market is open (Mon-Fri, 10:00–18:50 Moscow time).
-/// Returns Ok(()) if open or if endpoint is sandbox. Returns Err with message if closed.
-fn check_exchange_open(endpoint: &str) -> Result<(), AppError> {
-    if endpoint != "production" {
-        return Ok(()); // sandbox works 24/7
-    }
-
+/// Sandbox also rejects orders when the exchange is closed.
+fn check_exchange_open() -> Result<(), AppError> {
     let moscow_now = Utc::now() + chrono::Duration::hours(3); // UTC+3
     let weekday = moscow_now.weekday();
     let hour = moscow_now.hour();
@@ -99,8 +95,8 @@ pub async fn set_strategy(
     let (token, account_id, endpoint) =
         super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
 
-    // Check if exchange is open (skip for sandbox)
-    check_exchange_open(&endpoint)?;
+    // Check if exchange is open
+    check_exchange_open()?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -233,8 +229,8 @@ pub async fn run_strategy(
     let (token, account_id, endpoint) =
         super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
 
-    // Check if exchange is open (skip for sandbox)
-    check_exchange_open(&endpoint)?;
+    // Check if exchange is open
+    check_exchange_open()?;
 
     // Connect to T-Invest
     let ep = match endpoint.as_str() {
