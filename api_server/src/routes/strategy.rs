@@ -8,29 +8,122 @@ use crate::error::AppError;
 use crate::state::AppState;
 
 /// Check if MOEX bond market is open (Mon-Fri, 10:00–18:50 Moscow time).
-/// Sandbox also rejects orders when the exchange is closed.
-fn check_exchange_open() -> Result<(), AppError> {
+pub fn is_exchange_open() -> bool {
     let moscow_now = Utc::now() + chrono::Duration::hours(3); // UTC+3
     let weekday = moscow_now.weekday();
     let hour = moscow_now.hour();
     let minute = moscow_now.minute();
-    let time_mins = hour * 60 + minute; // minutes since midnight
+    let time_mins = hour * 60 + minute;
 
     let is_weekday = !matches!(weekday, chrono::Weekday::Sat | chrono::Weekday::Sun);
-    let is_trading_hours = time_mins >= 10 * 60 && time_mins <= 18 * 60 + 50; // 10:00 – 18:50
+    let is_trading_hours = time_mins >= 10 * 60 && time_mins <= 18 * 60 + 50;
 
-    if is_weekday && is_trading_hours {
-        Ok(())
+    is_weekday && is_trading_hours
+}
+
+fn exchange_closed_message() -> String {
+    let moscow_now = Utc::now() + chrono::Duration::hours(3);
+    let weekday = moscow_now.weekday();
+    let time_mins = moscow_now.hour() * 60 + moscow_now.minute();
+
+    if matches!(weekday, chrono::Weekday::Sat | chrono::Weekday::Sun) {
+        "Биржа не работает в выходные. Стратегия будет применена в понедельник в 10:00 МСК.".to_string()
+    } else if time_mins < 10 * 60 {
+        "Биржа ещё не открылась. Стратегия будет применена в 10:00 МСК.".to_string()
     } else {
-        let when = if !is_weekday {
-            "Биржа не работает в выходные. Торги возобновятся в понедельник в 10:00 МСК."
-        } else if time_mins < 10 * 60 {
-            "Биржа ещё не открылась. Торги начинаются в 10:00 МСК."
-        } else {
-            "Биржа уже закрылась. Торги идут с 10:00 до 18:50 МСК."
-        };
-        Err(AppError::BadRequest(when.to_string()))
+        "Биржа уже закрылась. Стратегия будет применена завтра в 10:00 МСК.".to_string()
     }
+}
+
+/// Mark portfolio for pending strategy execution.
+async fn queue_pending_run(pool: &sqlx::PgPool, portfolio_id: i64) -> Result<(), AppError> {
+    sqlx::query("UPDATE portfolio SET pending_strategy_run = TRUE WHERE id = $1")
+        .bind(portfolio_id)
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    Ok(())
+}
+
+/// Execute strategy for a portfolio (used by both direct run and background scheduler).
+pub async fn execute_strategy(
+    pool: &sqlx::PgPool,
+    portfolio_client: &portfolio::PortfolioClient,
+    portfolio_id: i64,
+    user_id: i64,
+) -> Result<RunResult, AppError> {
+    let portfolio = portfolio_client
+        .get_portfolio_for_user(user_id, portfolio_id)
+        .await?;
+
+    let strategy_name = portfolio
+        .strategy_name
+        .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
+
+    let (token, account_id, endpoint) =
+        super::tinvest::get_portfolio_tinvest(pool, user_id, portfolio_id).await?;
+
+    let ep = match endpoint.as_str() {
+        "production" => t_invest_api_rust::EndPoint::Prod,
+        _ => t_invest_api_rust::EndPoint::Sandbox,
+    };
+
+    let mut client = t_invest_api_rust::Client::try_new(token, ep)
+        .await
+        .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
+
+    match strategy_name.as_str() {
+        "diversified_short_duration" => {
+            let strat = trading_strategies::diversified_short_duration::DiversifiedShortDurationStrategy::default();
+            live_engine::run(&account_id, &mut client, strat).await;
+        }
+        "high_yield_short" => {
+            let strat = trading_strategies::high_yield_short::HighYieldShortStrategy::default();
+            live_engine::run(&account_id, &mut client, strat).await;
+        }
+        "yield_maximizer" => {
+            let strat = trading_strategies::yield_maximizer::YieldMaximizerStrategy::default();
+            live_engine::run(&account_id, &mut client, strat).await;
+        }
+        _ => return Err(AppError::BadRequest("unknown strategy".into())),
+    }
+
+    // Sync portfolio
+    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
+
+    sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let mut holdings_imported = 0;
+    for (isin, &quantity) in &tinvest_portfolio.bonds_count {
+        if quantity > 0 {
+            portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
+            holdings_imported += 1;
+        }
+    }
+
+    let cash = tinvest_portfolio.free_money;
+    portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
+
+    // Clear pending flag
+    sqlx::query("UPDATE portfolio SET pending_strategy_run = FALSE WHERE id = $1")
+        .bind(portfolio_id)
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    Ok(RunResult {
+        orders_count: holdings_imported,
+        message: format!(
+            "Стратегия '{}' выполнена. {} облигаций, кэш: {:.2} ₽",
+            strategy_name, holdings_imported, cash
+        ),
+    })
 }
 
 #[derive(Serialize)]
@@ -91,12 +184,27 @@ pub async fn set_strategy(
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
 
-    // Get T-Invest credentials
+    // Verify T-Invest is connected
+    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+
+    // Save new strategy
+    state
+        .portfolio_client
+        .set_strategy(portfolio_id, &req.strategy_name)
+        .await?;
+
+    // If exchange is closed, queue for later
+    if !is_exchange_open() {
+        queue_pending_run(&state.pool, portfolio_id).await?;
+        return Ok(Json(RunResult {
+            orders_count: 0,
+            message: exchange_closed_message(),
+        }));
+    }
+
+    // Exchange is open — sell old positions and run new strategy
     let (token, account_id, endpoint) =
         super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
-
-    // Check if exchange is open
-    check_exchange_open()?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -107,7 +215,7 @@ pub async fn set_strategy(
         .await
         .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
 
-    // Step 1: sell all current holdings
+    // Sell all current holdings
     let current = live_engine::get_portfolio(&mut client, &account_id)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
@@ -127,73 +235,12 @@ pub async fn set_strategy(
 
     if !sell_orders.is_empty() {
         live_engine::make_orders(&mut client, &sell_orders, &ticker_to_info, &account_id).await;
-        // Small delay for orders to settle
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    // Step 2: save new strategy
-    state
-        .portfolio_client
-        .set_strategy(portfolio_id, &req.strategy_name)
-        .await?;
-
-    // Step 3: run new strategy (it will buy based on fresh portfolio state)
-    // Re-fetch portfolio after sells
-    let mut client2 = t_invest_api_rust::Client::try_new(
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id)
-            .await?
-            .0,
-        ep,
-    )
-    .await
-    .map_err(|e| AppError::Internal(format!("T-Invest reconnection failed: {e}")))?;
-
-    match req.strategy_name.as_str() {
-        "diversified_short_duration" => {
-            let strat = trading_strategies::diversified_short_duration::DiversifiedShortDurationStrategy::default();
-            live_engine::run(&account_id, &mut client2, strat).await;
-        }
-        "high_yield_short" => {
-            let strat = trading_strategies::high_yield_short::HighYieldShortStrategy::default();
-            live_engine::run(&account_id, &mut client2, strat).await;
-        }
-        "yield_maximizer" => {
-            let strat = trading_strategies::yield_maximizer::YieldMaximizerStrategy::default();
-            live_engine::run(&account_id, &mut client2, strat).await;
-        }
-        _ => return Err(AppError::BadRequest("unknown strategy".into())),
-    }
-
-    // Step 4: sync portfolio from T-Invest
-    let tinvest_portfolio = live_engine::get_portfolio(&mut client2, &account_id)
-        .await
-        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
-
-    // Clear old holdings from DB before importing
-    sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
-        .bind(portfolio_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let mut holdings_imported = 0;
-    for (isin, &quantity) in &tinvest_portfolio.bonds_count {
-        if quantity > 0 {
-            state.portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
-            holdings_imported += 1;
-        }
-    }
-
-    let cash = tinvest_portfolio.free_money;
-    state.portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
-
-    Ok(Json(RunResult {
-        orders_count: holdings_imported,
-        message: format!(
-            "Sold all positions, switched to '{}'. Bought {} new holdings, cash: {} RUB",
-            req.strategy_name, holdings_imported, cash
-        ),
-    }))
+    // Run new strategy
+    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id).await
+        .map(Json)
 }
 
 pub async fn clear_strategy(
@@ -215,71 +262,29 @@ pub async fn run_strategy(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
 ) -> Result<Json<RunResult>, AppError> {
-    // Get portfolio and verify ownership
     let portfolio = state
         .portfolio_client
         .get_portfolio_for_user(user_id, portfolio_id)
         .await?;
 
-    let strategy_name = portfolio
+    portfolio
         .strategy_name
+        .as_ref()
         .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
 
-    // Get T-Invest credentials from portfolio
-    let (token, account_id, endpoint) =
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+    // Verify T-Invest is connected
+    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
 
-    // Check if exchange is open
-    check_exchange_open()?;
-
-    // Connect to T-Invest
-    let ep = match endpoint.as_str() {
-        "production" => t_invest_api_rust::EndPoint::Prod,
-        _ => t_invest_api_rust::EndPoint::Sandbox,
-    };
-
-    let mut client = t_invest_api_rust::Client::try_new(token, ep)
-        .await
-        .map_err(|e| AppError::Internal(format!("T-Invest connection failed: {e}")))?;
-
-    // Run the strategy via live_engine
-    match strategy_name.as_str() {
-        "diversified_short_duration" => {
-            let strat = trading_strategies::diversified_short_duration::DiversifiedShortDurationStrategy::default();
-            live_engine::run(&account_id, &mut client, strat).await;
-        }
-        "high_yield_short" => {
-            let strat = trading_strategies::high_yield_short::HighYieldShortStrategy::default();
-            live_engine::run(&account_id, &mut client, strat).await;
-        }
-        "yield_maximizer" => {
-            let strat = trading_strategies::yield_maximizer::YieldMaximizerStrategy::default();
-            live_engine::run(&account_id, &mut client, strat).await;
-        }
-        _ => return Err(AppError::BadRequest("unknown strategy".into())),
+    // If exchange is closed, queue for later
+    if !is_exchange_open() {
+        queue_pending_run(&state.pool, portfolio_id).await?;
+        return Ok(Json(RunResult {
+            orders_count: 0,
+            message: exchange_closed_message(),
+        }));
     }
 
-    // Auto-import: sync portfolio from T-Invest after strategy execution
-    let tinvest_portfolio = live_engine::get_portfolio(&mut client, &account_id)
+    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id)
         .await
-        .map_err(|e| AppError::Internal(format!("Failed to get portfolio: {e}")))?;
-
-    let mut holdings_imported = 0;
-    for (isin, &quantity) in &tinvest_portfolio.bonds_count {
-        if quantity > 0 {
-            state.portfolio_client.set_holding(portfolio_id, isin, quantity).await?;
-            holdings_imported += 1;
-        }
-    }
-
-    let cash = tinvest_portfolio.free_money;
-    state.portfolio_client.set_cash(portfolio_id, cash, "RUB").await?;
-
-    Ok(Json(RunResult {
-        orders_count: holdings_imported,
-        message: format!(
-            "Strategy '{}' executed. Imported {} holdings, cash: {} RUB",
-            strategy_name, holdings_imported, cash
-        ),
-    }))
+        .map(Json)
 }
