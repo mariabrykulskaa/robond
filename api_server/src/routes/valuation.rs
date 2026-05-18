@@ -10,7 +10,7 @@ use crate::state::AppState;
 use t_invest_api_rust::decimal::{money_value_to_decimal, quotation_to_decimal};
 use t_invest_api_rust::proto::{
     FindInstrumentRequest, GetLastPricesRequest, InstrumentIdType, InstrumentRequest,
-    InstrumentType,
+    InstrumentType, LastPriceType,
 };
 
 #[derive(Serialize)]
@@ -157,10 +157,11 @@ pub async fn get_portfolio_value(
 
     // Batch-fetch last prices (default type = any last known price)
     let last_prices = if !instrument_ids.is_empty() {
-        let request = GetLastPricesRequest {
+        let mut request = GetLastPricesRequest {
             instrument_id: instrument_ids,
             ..GetLastPricesRequest::default()
         };
+        request.set_last_price_type(LastPriceType::LastPriceExchange);
         client
             .market_data
             .get_last_prices(request)
