@@ -199,7 +199,7 @@ pub async fn connect(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Clear old holdings and cash when switching to a new account
+    // Clear old holdings and cash, then import from T-Invest
     sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
         .bind(portfolio_id)
         .execute(&state.pool)
@@ -210,6 +210,22 @@ pub async fn connect(
         .execute(&state.pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Auto-import portfolio from T-Invest
+    let ep = match endpoint {
+        "production" => t_invest_api_rust::EndPoint::Prod,
+        _ => t_invest_api_rust::EndPoint::Sandbox,
+    };
+    if let Ok(mut client) = t_invest_api_rust::Client::try_new(req.token.clone(), ep).await {
+        if let Ok(tinvest_portfolio) = live_engine::get_portfolio(&mut client, &req.account_id).await {
+            for (isin, &quantity) in &tinvest_portfolio.bonds_count {
+                if quantity > 0 {
+                    let _ = state.portfolio_client.set_holding(portfolio_id, isin, quantity).await;
+                }
+            }
+            let _ = state.portfolio_client.set_cash(portfolio_id, tinvest_portfolio.free_money, "RUB").await;
+        }
+    }
 
     Ok(Json(TInvestStatus {
         connected: true,
@@ -280,6 +296,18 @@ pub async fn disconnect(
     .execute(&state.pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Clear holdings and cash
+    sqlx::query("DELETE FROM portfolio_holding WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    sqlx::query("DELETE FROM portfolio_cash WHERE portfolio_id = $1")
+        .bind(portfolio_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(TInvestStatus {
         connected: false,
