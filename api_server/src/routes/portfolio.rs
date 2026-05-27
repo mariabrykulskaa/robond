@@ -50,7 +50,7 @@ pub async fn delete(
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Close sandbox account if connected
     if let Ok((token, account_id, endpoint)) =
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id, &state.token_encryption_key).await
     {
         if endpoint == "sandbox" {
             let ep = t_invest_api_rust::EndPoint::Sandbox;

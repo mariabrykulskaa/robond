@@ -51,6 +51,7 @@ pub async fn execute_strategy(
     portfolio_client: &portfolio::PortfolioClient,
     portfolio_id: i64,
     user_id: i64,
+    encryption_key: &[u8; 32],
 ) -> Result<RunResult, AppError> {
     let portfolio = portfolio_client
         .get_portfolio_for_user(user_id, portfolio_id)
@@ -61,7 +62,7 @@ pub async fn execute_strategy(
         .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
 
     let (token, account_id, endpoint) =
-        super::tinvest::get_portfolio_tinvest(pool, user_id, portfolio_id).await?;
+        super::tinvest::get_portfolio_tinvest(pool, user_id, portfolio_id, encryption_key).await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -185,7 +186,7 @@ pub async fn set_strategy(
         .await?;
 
     // Verify T-Invest is connected
-    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id, &state.token_encryption_key).await?;
 
     // Save new strategy
     state
@@ -204,7 +205,7 @@ pub async fn set_strategy(
 
     // Exchange is open — sell old positions and run new strategy
     let (token, account_id, endpoint) =
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id, &state.token_encryption_key).await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -239,7 +240,7 @@ pub async fn set_strategy(
     }
 
     // Run new strategy
-    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id).await
+    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id, &state.token_encryption_key).await
         .map(Json)
 }
 
@@ -273,7 +274,7 @@ pub async fn run_strategy(
         .ok_or_else(|| AppError::BadRequest("no strategy assigned to this portfolio".into()))?;
 
     // Verify T-Invest is connected
-    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await?;
+    super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id, &state.token_encryption_key).await?;
 
     // If exchange is closed, queue for later
     if !is_exchange_open() {
@@ -284,7 +285,7 @@ pub async fn run_strategy(
         }));
     }
 
-    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id)
+    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id, &state.token_encryption_key)
         .await
         .map(Json)
 }

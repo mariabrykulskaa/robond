@@ -48,7 +48,7 @@ impl DbConfig {
 
     pub fn database_url(&self) -> String {
         format!(
-            "postgresql://{}:{}@{}:{}/{}",
+            "postgresql://{}:{}@{}:{}/{}?sslmode=require",
             self.username, self.password, self.host, self.port, self.database
         )
     }

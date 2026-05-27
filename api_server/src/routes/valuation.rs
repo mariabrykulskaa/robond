@@ -52,7 +52,7 @@ pub async fn get_portfolio_value(
     }
 
     // Get T-Invest token from portfolio
-    let tinvest = super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id).await;
+    let tinvest = super::tinvest::get_portfolio_tinvest(&state.pool, user_id, portfolio_id, &state.token_encryption_key).await;
 
     let (token, account_id, endpoint) = match tinvest {
         Ok(creds) => creds,
