@@ -133,10 +133,26 @@ pub async fn fetch_accounts(
         // Return only the newly created account
         return Ok(Json(vec![AccountInfo {
             id: new_acc.account_id,
-            name: format!("Новый sandbox-счёт ({} ₽)", amount.to_string().as_str()
-                .chars().rev().enumerate()
-                .flat_map(|(i, c)| { if i > 0 && i % 3 == 0 { vec![' ', c] } else { vec![c] } })
-                .collect::<Vec<_>>().into_iter().rev().collect::<String>()),
+            name: format!(
+                "Новый sandbox-счёт ({} ₽)",
+                amount
+                    .to_string()
+                    .as_str()
+                    .chars()
+                    .rev()
+                    .enumerate()
+                    .flat_map(|(i, c)| {
+                        if i > 0 && i % 3 == 0 {
+                            vec![' ', c]
+                        } else {
+                            vec![c]
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<String>()
+            ),
             account_type: "Sandbox".to_string(),
         }]));
     }
@@ -228,7 +244,10 @@ pub async fn connect(
                     let _ = state.portfolio_client.set_holding(portfolio_id, isin, quantity).await;
                 }
             }
-            let _ = state.portfolio_client.set_cash(portfolio_id, tinvest_portfolio.free_money, "RUB").await;
+            let _ = state
+                .portfolio_client
+                .set_cash(portfolio_id, tinvest_portfolio.free_money, "RUB")
+                .await;
         }
     }
 
@@ -244,13 +263,14 @@ pub async fn status(
     State(state): State<AppState>,
     Path(portfolio_id): Path<i64>,
 ) -> Result<Json<TInvestStatus>, AppError> {
-    let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM portfolio WHERE id = $1 AND user_id = $2")
-            .bind(portfolio_id)
-            .bind(user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT tinvest_token, tinvest_account_id, tinvest_endpoint FROM portfolio WHERE id = $1 AND user_id = $2",
+    )
+    .bind(portfolio_id)
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
     match row {
         Some((Some(_token), Some(account_id), endpoint)) => Ok(Json(TInvestStatus {
@@ -285,9 +305,7 @@ pub async fn disconnect(
             if let Ok(mut client) = t_invest_api_rust::Client::try_new(token, ep).await {
                 let _ = client
                     .sandbox
-                    .close_sandbox_account(t_invest_api_rust::proto::CloseSandboxAccountRequest {
-                        account_id,
-                    })
+                    .close_sandbox_account(t_invest_api_rust::proto::CloseSandboxAccountRequest { account_id })
                     .await;
             }
         }

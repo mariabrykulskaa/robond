@@ -16,7 +16,7 @@ pub fn is_exchange_open() -> bool {
     let time_mins = hour * 60 + minute;
 
     let is_weekday = !matches!(weekday, chrono::Weekday::Sat | chrono::Weekday::Sun);
-    let is_trading_hours = time_mins >= 10 * 60 && time_mins <= 18 * 60 + 50;
+    let is_trading_hours = (10 * 60..=18 * 60 + 50).contains(&time_mins);
 
     is_weekday && is_trading_hours
 }
@@ -53,9 +53,7 @@ pub async fn execute_strategy(
     user_id: i64,
     encryption_key: &[u8; 32],
 ) -> Result<RunResult, AppError> {
-    let portfolio = portfolio_client
-        .get_portfolio_for_user(user_id, portfolio_id)
-        .await?;
+    let portfolio = portfolio_client.get_portfolio_for_user(user_id, portfolio_id).await?;
 
     let strategy_name = portfolio
         .strategy_name
@@ -240,8 +238,15 @@ pub async fn set_strategy(
     }
 
     // Run new strategy
-    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id, &state.token_encryption_key).await
-        .map(Json)
+    execute_strategy(
+        &state.pool,
+        &state.portfolio_client,
+        portfolio_id,
+        user_id,
+        &state.token_encryption_key,
+    )
+    .await
+    .map(Json)
 }
 
 pub async fn clear_strategy(
@@ -285,7 +290,13 @@ pub async fn run_strategy(
         }));
     }
 
-    execute_strategy(&state.pool, &state.portfolio_client, portfolio_id, user_id, &state.token_encryption_key)
-        .await
-        .map(Json)
+    execute_strategy(
+        &state.pool,
+        &state.portfolio_client,
+        portfolio_id,
+        user_id,
+        &state.token_encryption_key,
+    )
+    .await
+    .map(Json)
 }

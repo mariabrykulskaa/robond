@@ -40,8 +40,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/{id}/disconnect", delete(tinvest::disconnect))
         .route("/{id}/import", post(tinvest::import_portfolio));
 
-    let tinvest_routes = Router::new()
-        .route("/accounts", post(tinvest::fetch_accounts));
+    let tinvest_routes = Router::new().route("/accounts", post(tinvest::fetch_accounts));
 
     let strategy_routes = Router::new().route("/", get(strategy::list_strategies));
 

@@ -1,6 +1,6 @@
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, AeadCore, Key, Nonce,
+    AeadCore, Aes256Gcm, Key, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 
@@ -42,6 +42,5 @@ pub fn decrypt(encoded: &str, key: &[u8; 32]) -> Result<String, AppError> {
         .decrypt(nonce, ciphertext)
         .map_err(|e| AppError::Internal(format!("decryption failed: {e}")))?;
 
-    String::from_utf8(plaintext)
-        .map_err(|e| AppError::Internal(format!("invalid utf8 after decryption: {e}")))
+    String::from_utf8(plaintext).map_err(|e| AppError::Internal(format!("invalid utf8 after decryption: {e}")))
 }
