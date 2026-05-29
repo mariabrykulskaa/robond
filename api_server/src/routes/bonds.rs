@@ -80,7 +80,7 @@ pub async fn get_bond_info(
 ) -> Result<Json<BondInfo>, AppError> {
     // Get T-Invest token from portfolio
     let (token, _account_id, endpoint) =
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, query.portfolio_id).await?;
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, query.portfolio_id, &state.token_encryption_key).await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,

@@ -2,6 +2,7 @@
 
 mod auth;
 mod config;
+mod crypto;
 mod error;
 mod routes;
 mod state;
@@ -43,6 +44,7 @@ async fn main() {
         pool,
         portfolio_client,
         jwt_secret: api_config.jwt_secret,
+        token_encryption_key: api_config.token_encryption_key,
     };
 
     let app = routes::build_router(state.clone());
@@ -104,6 +106,7 @@ async fn pending_strategy_scheduler(state: state::AppState) {
                     &state.portfolio_client,
                     portfolio_id,
                     user_id,
+                    &state.token_encryption_key,
                 )
                 .await
                 {
@@ -139,6 +142,7 @@ async fn pending_strategy_scheduler(state: state::AppState) {
                 &state.portfolio_client,
                 portfolio_id,
                 user_id,
+                &state.token_encryption_key,
             )
             .await
             {
