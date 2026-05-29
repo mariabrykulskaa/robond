@@ -391,6 +391,11 @@ export default function PortfolioDetailPage() {
             {changingStrategy && (
               <div style={{ marginTop: 12 }}>
                 <p style={{ marginBottom: 8 }}>Выберите новую стратегию (все позиции будут проданы и перекуплены):</p>
+                <p className="meta" style={{ marginBottom: 8 }}>
+                  <a href="https://atsogoev.ru/rp" target="_blank" rel="noopener noreferrer">
+                    Тест на риск-профиль
+                  </a>
+                </p>
                 {settingStrategy && (
                   <p style={{ marginBottom: 8 }}>Продаём старые позиции и покупаем по новой стратегии...</p>
                 )}
@@ -413,6 +418,12 @@ export default function PortfolioDetailPage() {
         ) : (
           <div className="strategy-picker">
             <p style={{ marginBottom: 8 }}>Select a strategy:</p>
+            <p className="meta" style={{ marginBottom: 12 }}>
+              Не знаете, какую стратегию выбрать?{" "}
+              <a href="https://atsogoev.ru/rp" target="_blank" rel="noopener noreferrer">
+                Пройдите тест на риск-профиль
+              </a>
+            </p>
             {settingStrategy && (
               <p style={{ marginBottom: 8 }}>Продаём старые позиции и покупаем по новой стратегии...</p>
             )}
