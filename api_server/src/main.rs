@@ -7,8 +7,8 @@ mod error;
 mod routes;
 mod state;
 
-use config::ApiConfig;
 use chrono::Timelike;
+use config::ApiConfig;
 use portfolio::PortfolioClient;
 use sqlx::postgres::PgPoolOptions;
 use state::AppState;
@@ -78,12 +78,14 @@ async fn pending_strategy_scheduler(state: state::AppState) {
         let time_mins = t.hour() * 60 + t.minute();
 
         // Daily auto-run: at 10:15+ MSK, once per day
-        let should_daily_run = time_mins >= 10 * 60 + 15
-            && last_daily_run.map_or(true, |d| d < today);
+        let should_daily_run = time_mins >= 10 * 60 + 15 && last_daily_run.is_none_or(|d| d < today);
 
         if should_daily_run {
             last_daily_run = Some(today);
-            tracing::info!("Scheduler: daily strategy run triggered at {}", moscow_now.format("%H:%M MSK"));
+            tracing::info!(
+                "Scheduler: daily strategy run triggered at {}",
+                moscow_now.format("%H:%M MSK")
+            );
 
             // Get all portfolios with active strategy + T-Invest connected
             let all_rows: Vec<(i64, i64)> = match sqlx::query_as(

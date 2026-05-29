@@ -145,12 +145,11 @@ pub async fn get_prices(client: &mut Client, ticker_to_info: &HashMap<String, Bo
             continue;
         };
 
-        if let Some(bond_info) = ticker_to_info.get(&ticker) {
-            if let Some(points) = last_price.price {
-                if let Some(price) = get_price(points, bond_info) {
-                    prices.insert(ticker, price);
-                }
-            }
+        if let Some(bond_info) = ticker_to_info.get(&ticker)
+            && let Some(points) = last_price.price
+            && let Some(price) = get_price(points, bond_info)
+        {
+            prices.insert(ticker, price);
         }
     }
 
@@ -166,7 +165,10 @@ pub async fn make_order(
     let bond_info = match ticker_to_info.get(&order.isin) {
         Some(info) => info,
         None => {
-            eprintln!("[live_engine] Bond {} not found in ticker_to_info, skipping order", order.isin);
+            eprintln!(
+                "[live_engine] Bond {} not found in ticker_to_info, skipping order",
+                order.isin
+            );
             return;
         }
     };
@@ -185,7 +187,10 @@ pub async fn make_order(
 
     match client.orders.post_order(request).await {
         Ok(_) => {
-            eprintln!("[live_engine] Order executed: {:?} {} x{}", order.order_type, order.isin, order.count);
+            eprintln!(
+                "[live_engine] Order executed: {:?} {} x{}",
+                order.order_type, order.isin, order.count
+            );
         }
         Err(e) => {
             eprintln!("[live_engine] Order failed for {} (skipping): {}", order.isin, e);
@@ -209,7 +214,9 @@ use chrono::prelude::*;
 use history_market_data::MarketDataClient;
 
 pub async fn run<T: Strategy>(account_id: &str, client: &mut Client, stgategy: T) {
-    let portfolio = get_portfolio(client, account_id).await.expect("failed to get portfolio");
+    let portfolio = get_portfolio(client, account_id)
+        .await
+        .expect("failed to get portfolio");
     let ticker_to_info = get_ticker_to_info(client).await;
     let prices = get_prices(client, &ticker_to_info).await;
 

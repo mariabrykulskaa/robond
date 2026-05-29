@@ -57,9 +57,7 @@ pub async fn delete(
             if let Ok(mut client) = t_invest_api_rust::Client::try_new(token, ep).await {
                 let _ = client
                     .sandbox
-                    .close_sandbox_account(t_invest_api_rust::proto::CloseSandboxAccountRequest {
-                        account_id,
-                    })
+                    .close_sandbox_account(t_invest_api_rust::proto::CloseSandboxAccountRequest { account_id })
                     .await;
             }
         }

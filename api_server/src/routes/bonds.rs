@@ -7,8 +7,7 @@ use crate::error::AppError;
 use crate::state::AppState;
 use t_invest_api_rust::decimal::money_value_to_decimal;
 use t_invest_api_rust::proto::{
-    FindInstrumentRequest, GetBondCouponsRequest, InstrumentIdType, InstrumentRequest,
-    InstrumentType,
+    FindInstrumentRequest, GetBondCouponsRequest, InstrumentIdType, InstrumentRequest, InstrumentType,
 };
 
 #[derive(Deserialize)]
@@ -80,7 +79,8 @@ pub async fn get_bond_info(
 ) -> Result<Json<BondInfo>, AppError> {
     // Get T-Invest token from portfolio
     let (token, _account_id, endpoint) =
-        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, query.portfolio_id, &state.token_encryption_key).await?;
+        super::tinvest::get_portfolio_tinvest(&state.pool, user_id, query.portfolio_id, &state.token_encryption_key)
+            .await?;
 
     let ep = match endpoint.as_str() {
         "production" => t_invest_api_rust::EndPoint::Prod,
@@ -103,10 +103,7 @@ pub async fn get_bond_info(
         .map_err(|e| AppError::Internal(format!("Find instrument failed: {e}")))?
         .into_inner();
 
-    let found = search_resp
-        .instruments
-        .first()
-        .ok_or_else(|| AppError::NotFound)?;
+    let found = search_resp.instruments.first().ok_or(AppError::NotFound)?;
 
     // Get full bond info by FIGI
     let bond_resp = client
@@ -145,8 +142,7 @@ pub async fn get_bond_info(
 
     let (coupon_type, coupon_amount, next_coupon_date) = match client
         .instruments
-        .get_bond_coupons(GetBondCouponsRequest {
-            figi: String::new(),
+        .get_bond_coupons(GetBondCouponsRequest {            #[allow(deprecated)]            figi: String::new(),
             from: Some(now_ts),
             to: Some(future_ts),
             instrument_id: bond.figi.clone(),
@@ -161,10 +157,7 @@ pub async fn get_bond_info(
                     .pay_one_bond
                     .as_ref()
                     .map(|m| format!("{} {}", money_value_to_decimal(m), m.currency.to_uppercase()));
-                let date = next
-                    .coupon_date
-                    .as_ref()
-                    .map(|d| format_ts(d.seconds));
+                let date = next.coupon_date.as_ref().map(|d| format_ts(d.seconds));
                 (ct, amount, date)
             } else {
                 (None, None, None)
