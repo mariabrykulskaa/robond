@@ -142,7 +142,9 @@ pub async fn get_bond_info(
 
     let (coupon_type, coupon_amount, next_coupon_date) = match client
         .instruments
-        .get_bond_coupons(GetBondCouponsRequest {            #[allow(deprecated)]            figi: String::new(),
+        .get_bond_coupons(GetBondCouponsRequest {
+            #[allow(deprecated)]
+            figi: String::new(),
             from: Some(now_ts),
             to: Some(future_ts),
             instrument_id: bond.figi.clone(),
