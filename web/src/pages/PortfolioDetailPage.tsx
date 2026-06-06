@@ -360,7 +360,6 @@ export default function PortfolioDetailPage() {
           <div>
             <div className="strategy-active">
               <strong>{currentStrategy.name}</strong>
-              <p className="meta">{currentStrategy.description}</p>
             </div>
             {portfolio?.pending_strategy_run && (
               <p style={{ marginTop: 8, color: "#f59e0b", fontWeight: 500 }}>
@@ -408,7 +407,6 @@ export default function PortfolioDetailPage() {
                       disabled={settingStrategy}
                     >
                       <strong>{s.name}</strong>
-                      <span className="meta">{s.description}</span>
                     </button>
                   ))}
                 </div>
@@ -436,7 +434,6 @@ export default function PortfolioDetailPage() {
                   disabled={settingStrategy}
                 >
                   <strong>{s.name}</strong>
-                  <span className="meta">{s.description}</span>
                 </button>
               ))}
             </div>
